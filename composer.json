@@ -1,0 +1,43 @@
+{
+    "name": "puffinmail/module-lifecycle",
+    "description": "PuffinMail for Magento 2: syncs customers, newsletter subscribers, orders, abandoned carts, products and birthdays to PuffinMail, email marketing for online stores.",
+    "type": "magento2-module",
+    "license": "OSL-3.0",
+    "keywords": [
+        "magento",
+        "magento2",
+        "email marketing",
+        "newsletter",
+        "abandoned cart",
+        "puffinmail"
+    ],
+    "homepage": "https://puffinmail.co",
+    "support": {
+        "email": "hello@puffinmail.co"
+    },
+    "require": {
+        "php": ">=8.1",
+        "magento/framework": "*",
+        "magento/module-backend": "*",
+        "magento/module-catalog": "*",
+        "magento/module-checkout": "*",
+        "magento/module-config": "*",
+        "magento/module-configurable-product": "*",
+        "magento/module-customer": "*",
+        "magento/module-directory": "*",
+        "magento/module-newsletter": "*",
+        "magento/module-quote": "*",
+        "magento/module-sales": "*",
+        "magento/module-sales-rule": "*",
+        "magento/module-store": "*",
+        "guzzlehttp/guzzle": "^7"
+    },
+    "autoload": {
+        "files": [
+            "registration.php"
+        ],
+        "psr-4": {
+            "PuffinMail\\LifeCycle\\": ""
+        }
+    }
+}

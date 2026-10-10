@@ -1,0 +1,171 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Config:etc/system_file.xsd">
+    <system>
+        <tab id="puffinmail" translate="label" sortOrder="390">
+            <label>PuffinMail</label>
+        </tab>
+        <section id="puffinmail" translate="label" type="text" sortOrder="10"
+                 showInDefault="1" showInWebsite="1" showInStore="1">
+            <class>separator-top</class>
+            <label>PuffinMail</label>
+            <tab>puffinmail</tab>
+            <resource>PuffinMail_LifeCycle::config</resource>
+
+            <group id="connection" translate="label comment" type="text" sortOrder="10"
+                   showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Connection</label>
+                <comment><![CDATA[Create an API key under <strong>Stores</strong> at <a href="https://my.puffinmail.co/stores" target="_blank" rel="noopener">my.puffinmail.co</a> and paste it here. Each brand (store view) can connect to its own PuffinMail store: set the key at store view scope.]]></comment>
+                <field id="api_key" translate="label" type="obscure" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>API Key</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
+                </field>
+                <field id="api_url" translate="label comment" type="text" sortOrder="20"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>API URL</label>
+                    <comment>Leave as https://my.puffinmail.co unless testing against a development portal.</comment>
+                    <validate>validate-url</validate>
+                </field>
+                <field id="status" translate="label" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Status</label>
+                    <frontend_model>PuffinMail\LifeCycle\Block\Adminhtml\System\Config\Status</frontend_model>
+                </field>
+            </group>
+
+            <group id="sync" translate="label comment" type="text" sortOrder="20"
+                   showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Customers, Newsletter and Orders</label>
+                <comment>Customers are synced as contacts for segments, order and cart emails; only newsletter subscribers are added to the newsletter list.</comment>
+                <field id="customers" translate="label comment" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Sync Customers</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Name, address, birthday and order totals of registered customers (guest buyers are synced from their orders).</comment>
+                </field>
+                <field id="newsletter" translate="label comment" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Sync Newsletter Subscribers</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Magento newsletter subscribes and unsubscribes go to PuffinMail; unsubscribes in PuffinMail come back through the webhook.</comment>
+                </field>
+                <field id="consent_text" translate="label comment" type="text" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Consent Wording</label>
+                    <comment>Saved with each subscription as the consent record. Match the wording of your sign-up checkboxes.</comment>
+                    <depends><field id="newsletter">1</field></depends>
+                </field>
+                <field id="orders" translate="label comment" type="select" sortOrder="40"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Send Order Events</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>order.placed (revenue), order.completed, order.cancelled and order.refunded, for automations, segments and lifetime value.</comment>
+                </field>
+            </group>
+
+            <group id="abandoned_cart" translate="label comment" type="text" sortOrder="30"
+                   showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Abandoned Cart</label>
+                <comment>Sends cart.abandoned and cart.abandoned.reminder events. PuffinMail emails them with the "cart_abandoned" and "cart_abandoned_reminder" transactional notifications of your workspace.</comment>
+                <field id="enabled" translate="label" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enabled</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="audience" translate="label" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Send Reminders To</label>
+                    <source_model>PuffinMail\LifeCycle\Model\Config\Source\Audience</source_model>
+                </field>
+                <field id="capture_guest_email" translate="label comment" type="select" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Remember Guest Emails at Checkout</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Saves the email a guest types at the standard Luma checkout onto their cart, so it can be recovered. Checkouts that already save it (e.g. via GraphQL setGuestEmailOnCart) don't need this. Mention it in your privacy policy.</comment>
+                </field>
+                <field id="min_subtotal" translate="label" type="text" sortOrder="40"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Minimum Cart Subtotal</label>
+                    <validate>validate-zero-or-greater</validate>
+                </field>
+                <field id="max_age_days" translate="label" type="text" sortOrder="50"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Ignore Carts Older Than (days)</label>
+                    <validate>validate-greater-than-zero validate-digits</validate>
+                </field>
+                <field id="first_delay" translate="label comment" type="text" sortOrder="60"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>First Reminder After (minutes idle)</label>
+                    <comment>At least 15.</comment>
+                    <validate>validate-greater-than-zero validate-digits</validate>
+                </field>
+                <field id="first_coupon_rule" translate="label comment" type="select" sortOrder="70"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>First Reminder Coupon</label>
+                    <source_model>PuffinMail\LifeCycle\Model\Config\Source\CartRule</source_model>
+                    <comment>Cart price rule to take the coupon from. Rules with auto-generated coupons get a unique code per email (set Uses per Coupon = 1); a specific-coupon rule shares its one code.</comment>
+                </field>
+                <field id="second_enabled" translate="label" type="select" sortOrder="80"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Send Second Reminder</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="second_delay" translate="label" type="text" sortOrder="90"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Second Reminder After (hours after the first)</label>
+                    <validate>validate-greater-than-zero validate-digits</validate>
+                    <depends><field id="second_enabled">1</field></depends>
+                </field>
+                <field id="second_coupon_rule" translate="label" type="select" sortOrder="100"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Second Reminder Coupon</label>
+                    <source_model>PuffinMail\LifeCycle\Model\Config\Source\CartRule</source_model>
+                    <depends><field id="second_enabled">1</field></depends>
+                </field>
+            </group>
+
+            <group id="birthday" translate="label comment" type="text" sortOrder="40"
+                   showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Birthday</label>
+                <comment>Sends customer.birthday on the customer's Date of Birth; PuffinMail emails it with the "customer_birthday" transactional notification. Collect DOB via Customers &gt; Customer Configuration &gt; Name and Address Options &gt; Show Date of Birth.</comment>
+                <field id="enabled" translate="label" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enabled</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+                <field id="audience" translate="label" type="select" sortOrder="20"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Send To</label>
+                    <source_model>PuffinMail\LifeCycle\Model\Config\Source\Audience</source_model>
+                </field>
+                <field id="coupon_rule" translate="label" type="select" sortOrder="30"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Coupon</label>
+                    <source_model>PuffinMail\LifeCycle\Model\Config\Source\CartRule</source_model>
+                </field>
+            </group>
+
+            <group id="advanced" translate="label" type="text" sortOrder="90"
+                   showInDefault="1" showInWebsite="0" showInStore="0">
+                <label>Advanced</label>
+                <field id="debug" translate="label comment" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Debug Log</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Log every API call to var/log/puffinmail.log. Errors are always logged.</comment>
+                </field>
+            </group>
+            <group id="storefront" translate="label comment" type="text" sortOrder="50"
+                   showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Website</label>
+                <comment><![CDATA[The PuffinMail script on every page: visits from your emails, browse-abandonment emails, and signup forms (paste a form's <code>&lt;div data-puffinmail-form="…"&gt;&lt;/div&gt;</code> into a CMS page or block). It sets a first-party cookie (pm_vid): mention it in your privacy policy.]]></comment>
+                <field id="enabled" translate="label" type="select" sortOrder="10"
+                       showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Add the PuffinMail Script</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>

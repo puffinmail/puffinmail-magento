@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+    <!-- var/log/puffinmail.log -->
+    <virtualType name="PuffinMail\LifeCycle\Logger\Handler" type="Magento\Framework\Logger\Handler\Base">
+        <arguments>
+            <argument name="fileName" xsi:type="string">/var/log/puffinmail.log</argument>
+        </arguments>
+    </virtualType>
+    <virtualType name="PuffinMail\LifeCycle\Logger\Monolog" type="Magento\Framework\Logger\Monolog">
+        <arguments>
+            <argument name="name" xsi:type="string">puffinmail</argument>
+            <argument name="handlers" xsi:type="array">
+                <item name="file" xsi:type="object">PuffinMail\LifeCycle\Logger\Handler</item>
+            </argument>
+        </arguments>
+    </virtualType>
+    <type name="PuffinMail\LifeCycle\Model\Logger">
+        <arguments>
+            <argument name="logger" xsi:type="object">PuffinMail\LifeCycle\Logger\Monolog</argument>
+        </arguments>
+    </type>
+
+    <type name="Magento\Framework\Console\CommandList">
+        <arguments>
+            <argument name="commands" xsi:type="array">
+                <item name="puffinmail_connect" xsi:type="object">PuffinMail\LifeCycle\Console\Command\Connect</item>
+                <item name="puffinmail_run" xsi:type="object">PuffinMail\LifeCycle\Console\Command\Run</item>
+                <item name="puffinmail_backfill" xsi:type="object">PuffinMail\LifeCycle\Console\Command\Backfill</item>
+                <item name="puffinmail_status" xsi:type="object">PuffinMail\LifeCycle\Console\Command\Status</item>
+                <item name="puffinmail_test_email" xsi:type="object">PuffinMail\LifeCycle\Console\Command\TestEmail</item>
+                <item name="puffinmail_delete_contact" xsi:type="object">PuffinMail\LifeCycle\Console\Command\DeleteContact</item>
+                <item name="puffinmail_catalog" xsi:type="object">PuffinMail\LifeCycle\Console\Command\Catalog</item>
+            </argument>
+        </arguments>
+    </type>
+    <!-- Proxies keep `bin/magento` fast and working before setup:upgrade has created the tables. -->
+    <type name="PuffinMail\LifeCycle\Console\Command\Catalog">
+        <arguments>
+            <argument name="catalogSync" xsi:type="object">PuffinMail\LifeCycle\Model\CatalogSync\Proxy</argument>
+            <argument name="connection" xsi:type="object">PuffinMail\LifeCycle\Model\Connection\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="PuffinMail\LifeCycle\Console\Command\Connect">
+        <arguments>
+            <argument name="connection" xsi:type="object">PuffinMail\LifeCycle\Model\Connection\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="PuffinMail\LifeCycle\Console\Command\Run">
+        <arguments>
+            <argument name="outboxProcessor" xsi:type="object">PuffinMail\LifeCycle\Model\OutboxProcessor\Proxy</argument>
+            <argument name="abandonedCart" xsi:type="object">PuffinMail\LifeCycle\Model\AbandonedCart\Proxy</argument>
+            <argument name="birthday" xsi:type="object">PuffinMail\LifeCycle\Model\Birthday\Proxy</argument>
+            <argument name="backfill" xsi:type="object">PuffinMail\LifeCycle\Model\Backfill\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="PuffinMail\LifeCycle\Console\Command\Backfill">
+        <arguments>
+            <argument name="backfill" xsi:type="object">PuffinMail\LifeCycle\Model\Backfill\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="PuffinMail\LifeCycle\Console\Command\Status">
+        <arguments>
+            <argument name="connection" xsi:type="object">PuffinMail\LifeCycle\Model\Connection\Proxy</argument>
+            <argument name="outbox" xsi:type="object">PuffinMail\LifeCycle\Model\Outbox\Proxy</argument>
+            <argument name="backfill" xsi:type="object">PuffinMail\LifeCycle\Model\Backfill\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="PuffinMail\LifeCycle\Console\Command\TestEmail">
+        <arguments>
+            <argument name="abandonedCart" xsi:type="object">PuffinMail\LifeCycle\Model\AbandonedCart\Proxy</argument>
+            <argument name="birthday" xsi:type="object">PuffinMail\LifeCycle\Model\Birthday\Proxy</argument>
+        </arguments>
+    </type>
+    <type name="PuffinMail\LifeCycle\Console\Command\DeleteContact">
+        <arguments>
+            <argument name="outbox" xsi:type="object">PuffinMail\LifeCycle\Model\Outbox\Proxy</argument>
+        </arguments>
+    </type>
+</config>

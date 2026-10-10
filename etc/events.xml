@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Event/etc/events.xsd">
+    <!-- Global so admin, storefront, API and CLI changes are all synced. Observers only queue work. -->
+    <event name="newsletter_subscriber_save_after">
+        <observer name="puffinmail_newsletter" instance="PuffinMail\LifeCycle\Observer\NewsletterSubscriberSaved"/>
+    </event>
+    <event name="customer_save_after_data_object">
+        <observer name="puffinmail_customer" instance="PuffinMail\LifeCycle\Observer\CustomerSaved"/>
+    </event>
+    <event name="sales_order_save_after">
+        <observer name="puffinmail_order" instance="PuffinMail\LifeCycle\Observer\OrderSaved"/>
+    </event>
+    <!-- Catalogue (product blocks and recommendations in emails). -->
+    <event name="catalog_product_save_after">
+        <observer name="puffinmail_product" instance="PuffinMail\LifeCycle\Observer\ProductSaved"/>
+    </event>
+    <event name="cataloginventory_stock_item_save_after">
+        <observer name="puffinmail_stock" instance="PuffinMail\LifeCycle\Observer\ProductSaved"/>
+    </event>
+    <event name="catalog_product_delete_after">
+        <observer name="puffinmail_product_deleted" instance="PuffinMail\LifeCycle\Observer\ProductDeleted"/>
+    </event>
+    <event name="sales_order_creditmemo_save_after">
+        <observer name="puffinmail_creditmemo" instance="PuffinMail\LifeCycle\Observer\CreditmemoSaved"/>
+    </event>
+</config>

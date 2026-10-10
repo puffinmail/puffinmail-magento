@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Cron:etc/crontab.xsd">
+    <group id="default">
+        <job name="puffinmail_outbox" instance="PuffinMail\LifeCycle\Model\OutboxProcessor" method="execute">
+            <schedule>* * * * *</schedule>
+        </job>
+        <job name="puffinmail_backfill" instance="PuffinMail\LifeCycle\Model\Backfill" method="execute">
+            <schedule>* * * * *</schedule>
+        </job>
+        <job name="puffinmail_catalog" instance="PuffinMail\LifeCycle\Model\CatalogSync" method="execute">
+            <schedule>* * * * *</schedule>
+        </job>
+        <job name="puffinmail_abandoned_cart" instance="PuffinMail\LifeCycle\Model\AbandonedCart" method="execute">
+            <schedule>*/5 * * * *</schedule>
+        </job>
+        <job name="puffinmail_birthday" instance="PuffinMail\LifeCycle\Model\Birthday" method="execute">
+            <schedule>0 9-20 * * *</schedule>
+        </job>
+    </group>
+</config>

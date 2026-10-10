@@ -1,0 +1,72 @@
+{
+    "puffinmail_outbox": {
+        "column": {
+            "outbox_id": true,
+            "store_id": true,
+            "kind": true,
+            "dedupe_key": true,
+            "payload": true,
+            "status": true,
+            "attempts": true,
+            "next_attempt_at": true,
+            "last_error": true,
+            "created_at": true,
+            "updated_at": true
+        },
+        "index": {
+            "PUFFINMAIL_OUTBOX_STATUS_NEXT_ATTEMPT_AT": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PUFFINMAIL_OUTBOX_DEDUPE_KEY": true
+        }
+    },
+    "puffinmail_cart": {
+        "column": {
+            "quote_id": true,
+            "store_id": true,
+            "email": true,
+            "token": true,
+            "reminders_sent": true,
+            "first_sent_at": true,
+            "last_sent_at": true,
+            "coupon_code": true,
+            "clicked_at": true,
+            "status": true,
+            "order_id": true
+        },
+        "index": {
+            "PUFFINMAIL_CART_EMAIL_LAST_SENT_AT": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PUFFINMAIL_CART_TOKEN": true,
+            "PUFFINMAIL_CART_QUOTE_ID_QUOTE_ENTITY_ID": true
+        }
+    },
+    "puffinmail_order": {
+        "column": {
+            "order_id": true,
+            "placed_sent": true,
+            "completed_sent": true,
+            "cancelled_sent": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PUFFINMAIL_ORDER_ORDER_ID_SALES_ORDER_ENTITY_ID": true
+        }
+    },
+    "puffinmail_birthday": {
+        "column": {
+            "customer_id": true,
+            "year": true,
+            "store_id": true,
+            "coupon_code": true,
+            "sent_at": true
+        },
+        "constraint": {
+            "PRIMARY": true,
+            "PUFFINMAIL_BIRTHDAY_CUSTOMER_ID_CUSTOMER_ENTITY_ENTITY_ID": true
+        }
+    }
+}

@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
+    <default>
+        <puffinmail>
+            <connection>
+                <api_key backend_model="Magento\Config\Model\Config\Backend\Encrypted"/>
+                <api_url>https://my.puffinmail.co</api_url>
+            </connection>
+            <sync>
+                <customers>1</customers>
+                <newsletter>1</newsletter>
+                <consent_text>Email me news and offers. You can unsubscribe at any time.</consent_text>
+                <orders>1</orders>
+            </sync>
+            <abandoned_cart>
+                <enabled>0</enabled>
+                <audience>subscribed</audience>
+                <capture_guest_email>1</capture_guest_email>
+                <min_subtotal>0</min_subtotal>
+                <max_age_days>7</max_age_days>
+                <first_delay>60</first_delay>
+                <first_coupon_rule>0</first_coupon_rule>
+                <second_enabled>1</second_enabled>
+                <second_delay>24</second_delay>
+                <second_coupon_rule>0</second_coupon_rule>
+            </abandoned_cart>
+            <storefront>
+                <enabled>1</enabled>
+            </storefront>
+            <birthday>
+                <enabled>0</enabled>
+                <audience>subscribed</audience>
+                <coupon_rule>0</coupon_rule>
+            </birthday>
+            <advanced>
+                <debug>0</debug>
+            </advanced>
+        </puffinmail>
+    </default>
+</config>

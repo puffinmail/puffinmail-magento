@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+<schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
+    <!-- Outbox of PuffinMail API calls. Shop code only inserts rows; the puffinmail_outbox cron sends them in
+         batches and retries with backoff. dedupe_key collapses repeated updates of the same contact/event/ref.
+         kind: contact | event | unsubscribe | delete (API calls) or customer | order | creditmemo (references
+         that the cron expands into contacts and events). -->
+    <table name="puffinmail_outbox" resource="default" engine="innodb" comment="PuffinMail API outbox">
+        <column xsi:type="int" name="outbox_id" unsigned="true" nullable="false" identity="true"/>
+        <column xsi:type="smallint" name="store_id" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="varchar" name="kind" length="20" nullable="false"/>
+        <column xsi:type="varchar" name="dedupe_key" length="191" nullable="false"/>
+        <column xsi:type="mediumtext" name="payload" nullable="false"/>
+        <column xsi:type="varchar" name="status" length="10" nullable="false" default="pending"/>
+        <column xsi:type="smallint" name="attempts" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="datetime" name="next_attempt_at" nullable="false"/>
+        <column xsi:type="text" name="last_error" nullable="true"/>
+        <column xsi:type="datetime" name="created_at" nullable="false"/>
+        <column xsi:type="datetime" name="updated_at" nullable="false"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="outbox_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PUFFINMAIL_OUTBOX_DEDUPE_KEY">
+            <column name="dedupe_key"/>
+        </constraint>
+        <index referenceId="PUFFINMAIL_OUTBOX_STATUS_NEXT_ATTEMPT_AT" indexType="btree">
+            <column name="status"/>
+            <column name="next_attempt_at"/>
+        </index>
+    </table>
+
+    <!-- Abandoned-cart state per quote: reminders sent, the coupon handed out and the restore-link token. -->
+    <table name="puffinmail_cart" resource="default" engine="innodb" comment="PuffinMail abandoned carts">
+        <column xsi:type="int" name="quote_id" unsigned="true" nullable="false"/>
+        <column xsi:type="smallint" name="store_id" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="varchar" name="email" length="255" nullable="false"/>
+        <column xsi:type="varchar" name="token" length="32" nullable="false"/>
+        <column xsi:type="smallint" name="reminders_sent" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="datetime" name="first_sent_at" nullable="true"/>
+        <column xsi:type="datetime" name="last_sent_at" nullable="true"/>
+        <column xsi:type="varchar" name="coupon_code" length="255" nullable="true"/>
+        <column xsi:type="datetime" name="clicked_at" nullable="true"/>
+        <column xsi:type="varchar" name="status" length="12" nullable="false" default="active"/>
+        <column xsi:type="int" name="order_id" unsigned="true" nullable="true"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="quote_id"/>
+        </constraint>
+        <constraint xsi:type="unique" referenceId="PUFFINMAIL_CART_TOKEN">
+            <column name="token"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PUFFINMAIL_CART_QUOTE_ID_QUOTE_ENTITY_ID"
+                    table="puffinmail_cart" column="quote_id" referenceTable="quote"
+                    referenceColumn="entity_id" onDelete="CASCADE"/>
+        <index referenceId="PUFFINMAIL_CART_EMAIL_LAST_SENT_AT" indexType="btree">
+            <column name="email"/>
+            <column name="last_sent_at"/>
+        </index>
+    </table>
+
+    <!-- Which order events have been sent, so a status change never re-sends (and re-triggers) one. -->
+    <table name="puffinmail_order" resource="default" engine="innodb" comment="PuffinMail order event state">
+        <column xsi:type="int" name="order_id" unsigned="true" nullable="false"/>
+        <column xsi:type="smallint" name="placed_sent" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="smallint" name="completed_sent" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="smallint" name="cancelled_sent" unsigned="true" nullable="false" default="0"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="order_id"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PUFFINMAIL_ORDER_ORDER_ID_SALES_ORDER_ENTITY_ID"
+                    table="puffinmail_order" column="order_id" referenceTable="sales_order"
+                    referenceColumn="entity_id" onDelete="CASCADE"/>
+    </table>
+
+    <!-- One birthday event per customer per year. -->
+    <table name="puffinmail_birthday" resource="default" engine="innodb" comment="PuffinMail birthday events sent">
+        <column xsi:type="int" name="customer_id" unsigned="true" nullable="false"/>
+        <column xsi:type="smallint" name="year" unsigned="true" nullable="false"/>
+        <column xsi:type="smallint" name="store_id" unsigned="true" nullable="false" default="0"/>
+        <column xsi:type="varchar" name="coupon_code" length="255" nullable="true"/>
+        <column xsi:type="datetime" name="sent_at" nullable="false"/>
+        <constraint xsi:type="primary" referenceId="PRIMARY">
+            <column name="customer_id"/>
+            <column name="year"/>
+        </constraint>
+        <constraint xsi:type="foreign" referenceId="PUFFINMAIL_BIRTHDAY_CUSTOMER_ID_CUSTOMER_ENTITY_ENTITY_ID"
+                    table="puffinmail_birthday" column="customer_id" referenceTable="customer_entity"
+                    referenceColumn="entity_id" onDelete="CASCADE"/>
+    </table>
+</schema>

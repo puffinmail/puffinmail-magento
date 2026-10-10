@@ -1,0 +1,49 @@
+<?php
+/**
+ * PuffinMail storefront script. The signed-in customer (if any) comes from the private `puffinmail` customer-data
+ * section, so the script loads once that's known (or after a short wait). Works on Luma (RequireJS customer-data)
+ * and on Hyvä, which has no RequireJS: private sections arrive with its `private-content-loaded` event, and inline
+ * scripts are registered with Hyvä's CSP helper.
+ *
+ * @var \Magento\Framework\View\Element\Template $block
+ * @var \PuffinMail\LifeCycle\ViewModel\Storefront $viewModel
+ * @var \Hyva\Theme\ViewModel\HyvaCsp|null $hyvaCsp (Hyvä themes only)
+ */
+$viewModel = $block->getData('view_model');
+$scriptUrl = $viewModel->getScriptUrl();
+if ($scriptUrl === '') {
+    return;
+}
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES;
+?>
+<script>
+    (function () {
+        window.PuffinMail = Object.assign(window.PuffinMail || {}, <?= /* @noEscape */ json_encode((object) $viewModel->getPageHints(), $jsonFlags) ?>);
+        var loaded = false;
+        function load(data) {
+            if (loaded) { return; }
+            loaded = true;
+            if (data && data.identity) { window.PuffinMail.identity = data.identity; }
+            var s = document.createElement('script');
+            s.async = true;
+            s.src = <?= /* @noEscape */ json_encode($scriptUrl, $jsonFlags) ?>;
+            document.head.appendChild(s);
+        }
+        setTimeout(function () { load(null); }, 2000);
+        if (typeof window.require !== 'function') {
+            // Hyvä: the private sections come with this event (from its cache, or once fetched).
+            window.addEventListener('private-content-loaded', function (event) {
+                var sections = event.detail && event.detail.data;
+                load(sections && sections.puffinmail);
+            });
+            return;
+        }
+        window.require(['Magento_Customer/js/customer-data'], function (customerData) {
+            var section = customerData.get('puffinmail');
+            var current = section();
+            if (current && current.data_id) { load(current); return; }
+            var subscription = section.subscribe(function (data) { subscription.dispose(); load(data); });
+        });
+    })();
+</script>
+<?php if (isset($hyvaCsp)) { $hyvaCsp->registerInlineScript(); } ?>

@@ -1,0 +1,15 @@
+<?php
+/** @var \Magento\Framework\View\Element\Template $block */
+/** @var \Magento\Framework\Escaper $escaper */
+/** @var \PuffinMail\LifeCycle\ViewModel\CaptureEmail $viewModel */
+$viewModel = $block->getData('view_model');
+if (!$viewModel->isEnabled()) {
+    return;
+}
+// x-magento-init isn't inline script, so it's fine under the checkout's strict CSP.
+?>
+<script type="text/x-magento-init">
+<?= /* @noEscape */ json_encode([
+    '*' => ['PuffinMail_LifeCycle/js/capture-email' => ['url' => $viewModel->getUrl()]],
+], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?>
+</script>
