@@ -20,6 +20,15 @@ class CatalogSync
     private const FLAG_PREFIX = 'puffinmail_catalog_';
     private const PAGE_SIZE = 200;
 
+    /**
+     * CatalogSync constructor.
+     *
+     * @param Connection $connection
+     * @param Outbox $outbox
+     * @param CollectionFactory $productCollectionFactory
+     * @param FlagManager $flagManager
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Connection $connection,
         private readonly Outbox $outbox,
@@ -29,6 +38,11 @@ class CatalogSync
     ) {
     }
 
+    /**
+     * Cron entry point: queues the next page of the catalogue for each connected store view.
+     *
+     * @return void
+     */
     public function execute(): void
     {
         foreach ($this->connection->connectedStores() as $store) {
@@ -37,23 +51,46 @@ class CatalogSync
                 $this->connection->ensureStorefront($storeId);
                 $this->step($storeId, (int) $store->getWebsiteId());
             } catch (\Throwable $e) {
-                $this->logger->warning('PuffinMail catalogue sync for store view ' . $storeId . ' failed: ' . $e->getMessage());
+                $this->logger->warning(
+                    'PuffinMail catalogue sync for store view ' . $storeId . ' failed: ' . $e->getMessage()
+                );
             }
         }
     }
 
-    /** @return array{status?: string, last_id?: int, products?: int, started_at?: int, finished_at?: int} */
+    /**
+     * The catalogue sync state of a store view ([] if it has never run).
+     *
+     * @param int $storeId
+     * @return array{status?: string, last_id?: int, products?: int, started_at?: int, finished_at?: int}
+     */
     public function state(int $storeId): array
     {
         $state = $this->flagManager->getFlagData(self::FLAG_PREFIX . $storeId);
         return is_array($state) ? $state : [];
     }
 
+    /**
+     * Starts the store view's catalogue sync again from the first product.
+     *
+     * @param int $storeId
+     * @return void
+     */
     public function restart(int $storeId): void
     {
-        $this->flagManager->saveFlag(self::FLAG_PREFIX . $storeId, ['status' => 'running', 'last_id' => 0, 'products' => 0, 'started_at' => time()]);
+        $this->flagManager->saveFlag(
+            self::FLAG_PREFIX . $storeId,
+            ['status' => 'running', 'last_id' => 0, 'products' => 0, 'started_at' => time()]
+        );
     }
 
+    /**
+     * Queues references for the next page of the store view's visible products.
+     *
+     * @param int $storeId
+     * @param int $websiteId
+     * @return void
+     */
     private function step(int $storeId, int $websiteId): void
     {
         $state = $this->state($storeId);
@@ -68,7 +105,10 @@ class CatalogSync
         $collection = $this->productCollectionFactory->create()
             ->addWebsiteFilter([$websiteId])
             ->addAttributeToFilter('status', Status::STATUS_ENABLED)
-            ->addAttributeToFilter('visibility', ['in' => [Visibility::VISIBILITY_IN_CATALOG, Visibility::VISIBILITY_BOTH]])
+            ->addAttributeToFilter(
+                'visibility',
+                ['in' => [Visibility::VISIBILITY_IN_CATALOG, Visibility::VISIBILITY_BOTH]]
+            )
             ->addFieldToFilter('entity_id', ['gt' => (int) ($state['last_id'] ?? 0)])
             ->setOrder('entity_id', 'ASC')
             ->setPageSize(self::PAGE_SIZE)
@@ -88,7 +128,9 @@ class CatalogSync
         if (count($ids) < self::PAGE_SIZE) {
             $state['status'] = 'done';
             $state['finished_at'] = time();
-            $this->logger->info(sprintf('PuffinMail catalogue queued for store view %d: %d products', $storeId, $state['products']));
+            $this->logger->info(
+                sprintf('PuffinMail catalogue queued for store view %d: %d products', $storeId, $state['products'])
+            );
         }
         $this->flagManager->saveFlag(self::FLAG_PREFIX . $storeId, $state);
     }

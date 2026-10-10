@@ -17,6 +17,14 @@ use PuffinMail\LifeCycle\Model\Outbox;
  */
 class ProductSaved implements ObserverInterface
 {
+    /**
+     * ProductSaved constructor.
+     *
+     * @param Connection $connection
+     * @param Outbox $outbox
+     * @param Configurable $configurable
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Connection $connection,
         private readonly Outbox $outbox,
@@ -25,17 +33,27 @@ class ProductSaved implements ObserverInterface
     ) {
     }
 
+    /**
+     * Queues references for the product (and its configurable parents) in the matching connected store views.
+     *
+     * @param Observer $observer
+     * @return void
+     */
     public function execute(Observer $observer): void
     {
         try {
             $product = $observer->getEvent()->getData('product');
-            $productId = $product instanceof Product ? (int) $product->getId() : (int) $observer->getEvent()->getData('item')?->getProductId();
+            $productId = $product instanceof Product
+                ? (int) $product->getId()
+                : (int) $observer->getEvent()->getData('item')?->getProductId();
             if ($productId <= 0) {
                 return;
             }
             // A configurable product's child (a size or colour) changes the parent's price and stock: the parent
             // is what emails show, so refresh it too.
-            $productIds = array_unique([$productId, ...array_map('intval', $this->configurable->getParentIdsByChild($productId))]);
+            $productIds = array_unique(
+                [$productId, ...array_map('intval', $this->configurable->getParentIdsByChild($productId))]
+            );
             $websiteIds = $product instanceof Product ? array_map('intval', (array) $product->getWebsiteIds()) : [];
             foreach ($this->connection->connectedStores() as $store) {
                 if (!$websiteIds || in_array((int) $store->getWebsiteId(), $websiteIds, true)) {

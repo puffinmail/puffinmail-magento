@@ -33,6 +33,16 @@ class Index implements HttpPostActionInterface, CsrfAwareActionInterface
         'contact.unsubscribed' => 'unsubscribed',
     ];
 
+    /**
+     * Index constructor.
+     *
+     * @param HttpRequest $request
+     * @param JsonFactory $jsonFactory
+     * @param StoreManagerInterface $storeManager
+     * @param Connection $connection
+     * @param NewsletterStatus $newsletterStatus
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly HttpRequest $request,
         private readonly JsonFactory $jsonFactory,
@@ -43,6 +53,12 @@ class Index implements HttpPostActionInterface, CsrfAwareActionInterface
     ) {
     }
 
+    /**
+     * Checks the signature and applies a subscription change to Magento's newsletter status.
+     *
+     * @return Json
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
     public function execute(): Json
     {
         $result = $this->jsonFactory->create();
@@ -65,7 +81,13 @@ class Index implements HttpPostActionInterface, CsrfAwareActionInterface
         if (isset(self::STATUSES[$type]) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
             try {
                 $changed = $this->newsletterStatus->apply($storeId, $email, self::STATUSES[$type]);
-                $this->logger->debug(sprintf('Webhook %s for %s (store view %d): %s', $type, $email, $storeId, $changed ? 'applied' : 'no change'));
+                $this->logger->debug(sprintf(
+                    'Webhook %s for %s (store view %d): %s',
+                    $type,
+                    $email,
+                    $storeId,
+                    $changed ? 'applied' : 'no change'
+                ));
             } catch (\Throwable $e) {
                 $this->logger->error('Webhook ' . $type . ' failed: ' . $e->getMessage());
                 return $result->setHttpResponseCode(500)->setData(['error' => 'Could not apply the change']);
@@ -74,6 +96,15 @@ class Index implements HttpPostActionInterface, CsrfAwareActionInterface
         return $result->setData(['ok' => true]);
     }
 
+    /**
+     * Whether a PuffinMail-Signature header is a valid HMAC of the body, made within the last five minutes.
+     *
+     * @param string $header
+     * @param string $body
+     * @param string $secret
+     * @param int $now
+     * @return bool
+     */
     public static function validSignature(string $header, string $body, string $secret, int $now): bool
     {
         $parts = [];
@@ -92,12 +123,23 @@ class Index implements HttpPostActionInterface, CsrfAwareActionInterface
         return hash_equals(hash_hmac('sha256', $parts['t'] . '.' . $body, $secret), $parts['v1']);
     }
 
-    /** Server-to-server: the HMAC signature replaces the form key. */
+    /**
+     * Server-to-server: the HMAC signature replaces the form key.
+     *
+     * @param RequestInterface $request
+     * @return InvalidRequestException|null
+     */
     public function createCsrfValidationException(RequestInterface $request): ?InvalidRequestException
     {
         return null;
     }
 
+    /**
+     * Skips the form key check (the HMAC signature is checked in execute()).
+     *
+     * @param RequestInterface $request
+     * @return bool|null
+     */
     public function validateForCsrf(RequestInterface $request): ?bool
     {
         return true;

@@ -33,6 +33,16 @@ class NewsletterSubscriberSaved implements ObserverInterface
         'checkout_onepage_success' => 'checkout',
     ];
 
+    /**
+     * NewsletterSubscriberSaved constructor.
+     *
+     * @param Config $config
+     * @param Outbox $outbox
+     * @param RequestInterface $request
+     * @param RemoteAddress $remoteAddress
+     * @param State $appState
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Outbox $outbox,
@@ -43,6 +53,13 @@ class NewsletterSubscriberSaved implements ObserverInterface
     ) {
     }
 
+    /**
+     * Queues a subscribe (with consent) or an unsubscribe when a subscriber's status changes.
+     *
+     * @param Observer $observer
+     * @return void
+     * @throws DeadlockException|LockWaitException so Magento sees the rolled-back transaction
+     */
     public function execute(Observer $observer): void
     {
         $subscriber = $observer->getEvent()->getData('data_object');
@@ -79,7 +96,12 @@ class NewsletterSubscriberSaved implements ObserverInterface
         }
     }
 
-    /** The consent record PuffinMail keeps with the subscription. */
+    /**
+     * The consent record PuffinMail keeps with the subscription.
+     *
+     * @param int $storeId
+     * @return array
+     */
     private function consent(int $storeId): array
     {
         $ip = $this->remoteAddress->getRemoteAddress();
@@ -91,6 +113,11 @@ class NewsletterSubscriberSaved implements ObserverInterface
         ], static fn ($value) => $value !== null);
     }
 
+    /**
+     * Where the subscription came from: admin, signup form, account, registration, checkout, api or magento.
+     *
+     * @return string
+     */
     private function source(): string
     {
         try {

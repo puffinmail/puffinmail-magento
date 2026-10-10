@@ -16,6 +16,13 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class Connect extends Command
 {
+    /**
+     * Connect constructor.
+     *
+     * @param Config $config
+     * @param Connection $connection
+     * @param StoreManagerInterface $storeManager
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Connection $connection,
@@ -24,12 +31,24 @@ class Connect extends Command
         parent::__construct();
     }
 
+    /**
+     * Defines the command name and description.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:connect')
             ->setDescription('Connect (or refresh) every store view that has a PuffinMail API key');
     }
 
+    /**
+     * Connects each store view that has an API key and prints the result; fails if any connection fails.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $status = Command::SUCCESS;

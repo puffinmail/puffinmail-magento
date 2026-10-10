@@ -11,6 +11,14 @@ use PuffinMail\LifeCycle\Model\Config;
 
 class CaptureEmail implements ArgumentInterface
 {
+    /**
+     * CaptureEmail constructor.
+     *
+     * @param Config $config
+     * @param StoreManagerInterface $storeManager
+     * @param CustomerSession $customerSession
+     * @param UrlInterface $url
+     */
     public function __construct(
         private readonly Config $config,
         private readonly StoreManagerInterface $storeManager,
@@ -19,6 +27,12 @@ class CaptureEmail implements ArgumentInterface
     ) {
     }
 
+    /**
+     * Whether to capture a guest's checkout email: a guest, a connected store view and the setting on.
+     *
+     * @return bool
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
     public function isEnabled(): bool
     {
         $storeId = (int) $this->storeManager->getStore()->getId();
@@ -28,6 +42,11 @@ class CaptureEmail implements ArgumentInterface
             && $this->config->isSetFlag('abandoned_cart/capture_guest_email', $storeId);
     }
 
+    /**
+     * The URL capture-email.js posts the email to (Controller\Cart\Email).
+     *
+     * @return string
+     */
     public function getUrl(): string
     {
         return $this->url->getUrl('puffinmail/cart/email', ['_secure' => true]);

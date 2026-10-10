@@ -15,6 +15,13 @@ use PuffinMail\LifeCycle\Model\Connection;
  */
 class Identity implements SectionSourceInterface
 {
+    /**
+     * Identity constructor.
+     *
+     * @param CustomerSession $customerSession
+     * @param Connection $connection
+     * @param StoreManagerInterface $storeManager
+     */
     public function __construct(
         private readonly CustomerSession $customerSession,
         private readonly Connection $connection,
@@ -22,6 +29,12 @@ class Identity implements SectionSourceInterface
     ) {
     }
 
+    /**
+     * The signed-in customer's email and its signature, or [] for guests and unconnected store views.
+     *
+     * @return array
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
     public function getSectionData(): array
     {
         if (!$this->customerSession->isLoggedIn()) {

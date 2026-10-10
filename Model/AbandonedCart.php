@@ -14,8 +14,8 @@ use PuffinMail\LifeCycle\Model\Api\Client;
  * Abandoned carts, straight from Magento's quotes. Cron (every 5 min) sends, per active cart that has an email:
  *  - `cart.abandoned` once the cart has been idle for the first delay (minutes);
  *  - `cart.abandoned.reminder` the second delay (hours) after the first reminder and the last cart activity.
- * PuffinMail emails each with the workspace's transactional notification of the same name (cart_abandoned,
- * cart_abandoned_reminder), using the event's properties as template variables (items, restore_url, coupon).
+ * PuffinMail emails each with the matching store email (Store emails in PuffinMail), using the event's
+ * properties as template variables (items, restore_url, coupon).
  *
  * Magento owns the timing, so a cart that's bought or emptied never gets a reminder. Skipped: carts older than
  * max_age_days or below min_subtotal, an address's older carts, addresses that ordered since the cart was
@@ -36,6 +36,21 @@ class AbandonedCart
     private const MIN_FIRST_DELAY_MINUTES = 15;
     private const BATCH_LIMIT = 3000;
 
+    /**
+     * AbandonedCart constructor.
+     *
+     * @param Config $config
+     * @param Connection $connection
+     * @param ResourceConnection $resource
+     * @param StoreManagerInterface $storeManager
+     * @param Outbox $outbox
+     * @param Mapper $mapper
+     * @param CouponProvider $couponProvider
+     * @param StoreEmulation $emulation
+     * @param Client $client
+     * @param Random $random
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Connection $connection,
@@ -51,36 +66,52 @@ class AbandonedCart
     ) {
     }
 
+    /**
+     * Cron entry point: queues the reminders that are due in every store view.
+     *
+     * @return void
+     */
     public function execute(): void
     {
         $this->run();
     }
 
     /**
+     * Queues the reminders that are due in every store view where abandoned carts are on.
+     *
+     * @param bool $dryRun
      * @return string[] one line per reminder queued (or that would be, when $dryRun)
      */
     public function run(bool $dryRun = false): array
     {
-        $report = [];
+        $parts = [];
         foreach ($this->storeManager->getStores() as $store) {
             $storeId = (int) $store->getId();
             if (!$this->config->isSetFlag('abandoned_cart/enabled', $storeId)) {
                 continue;
             }
             if (!$this->connection->isConnected($storeId)) {
-                $report[] = sprintf('[%s] skipped: not connected to PuffinMail', $store->getCode());
+                $parts[] = [sprintf('[%s] skipped: not connected to PuffinMail', $store->getCode())];
                 continue;
             }
-            $report = array_merge($report, $this->emulation->run($storeId, fn () => $this->runStore($store, $dryRun)));
+            $parts[] = $this->emulation->run($storeId, fn () => $this->runStore($store, $dryRun));
         }
-        return $report;
+        return array_merge(...$parts);
     }
 
     /**
-     * Sends reminder $step for a quote to $to straight away, without touching cart state or generating a
-     * coupon (a configured coupon shows as TESTCODE). The event id is unique, so it always sends.
+     * Sends reminder $step for a quote to $to straight away.
      *
+     * It doesn't touch cart state or generate a coupon (a configured coupon shows as TESTCODE). The event id is
+     * unique, so it always sends.
+     *
+     * @param int $quoteId
+     * @param string $to
+     * @param int $step
      * @return array the API's result for the event
+     * @throws \InvalidArgumentException if the quote doesn't exist
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     * @throws \PuffinMail\LifeCycle\Model\Api\ApiException
      */
     public function sendTest(int $quoteId, string $to, int $step = 1): array
     {
@@ -110,13 +141,19 @@ class AbandonedCart
     }
 
     /**
-     * Called when an order is synced: an order from a tracked cart recovers it, and after a reminder that
-     * also sends `cart.recovered` (the reminder worked).
+     * Called when an order is synced: an order from a tracked cart recovers it.
+     *
+     * After a reminder, it also sends `cart.recovered` (the reminder worked).
+     *
+     * @param Order $order
+     * @return void
      */
     public function orderPlaced(Order $order): void
     {
         $quoteId = (int) $order->getQuoteId();
-        if ($quoteId <= 0 || in_array($order->getState(), [Order::STATE_CANCELED, Order::STATE_PENDING_PAYMENT], true)) {
+        if ($quoteId <= 0
+            || in_array($order->getState(), [Order::STATE_CANCELED, Order::STATE_PENDING_PAYMENT], true)
+        ) {
             return;
         }
         $connection = $this->resource->getConnection();
@@ -152,7 +189,12 @@ class AbandonedCart
         ], $order->getStore(), ['quote_id' => $quoteId, 'order_id' => (int) $order->getId()]));
     }
 
-    /** puffinmail_cart row for a restore-link token. */
+    /**
+     * The puffinmail_cart row for a restore-link token.
+     *
+     * @param string $token
+     * @return array|null
+     */
     public function getByToken(string $token): ?array
     {
         if (!preg_match('/^[A-Za-z0-9]{32}$/', $token)) {
@@ -164,6 +206,12 @@ class AbandonedCart
         ) ?: null;
     }
 
+    /**
+     * Records the first click on a cart's restore link.
+     *
+     * @param int $quoteId
+     * @return void
+     */
     public function markClicked(int $quoteId): void
     {
         $this->resource->getConnection()->update(
@@ -175,12 +223,22 @@ class AbandonedCart
 
     // -------------------------------------------------------------------------------------------------------
 
+    /**
+     * Queues the reminders that are due in one store view (run under its storefront emulation).
+     *
+     * @param StoreInterface $store
+     * @param bool $dryRun
+     * @return string[]
+     */
     private function runStore(StoreInterface $store, bool $dryRun): array
     {
         $storeId = (int) $store->getId();
         $report = [];
         $seen = [];
-        $firstDelay = max(self::MIN_FIRST_DELAY_MINUTES, (int) $this->config->getValue('abandoned_cart/first_delay', $storeId)) * 60;
+        $firstDelay = max(
+            self::MIN_FIRST_DELAY_MINUTES,
+            (int) $this->config->getValue('abandoned_cart/first_delay', $storeId)
+        ) * 60;
         $secondDelay = $this->config->isSetFlag('abandoned_cart/second_enabled', $storeId)
             ? max(1, (int) $this->config->getValue('abandoned_cart/second_delay', $storeId)) * 3600
             : null;
@@ -212,7 +270,11 @@ class AbandonedCart
 
             if ($this->hasOrderedSince($email, (string) $row['updated_at'], $storeId)) {
                 if (!$dryRun && $sent > 0) {
-                    $this->resource->getConnection()->update($this->table(), ['status' => 'recovered'], ['quote_id = ?' => $quoteId]);
+                    $this->resource->getConnection()->update(
+                        $this->table(),
+                        ['status' => 'recovered'],
+                        ['quote_id = ?' => $quoteId]
+                    );
                 }
                 continue;
             }
@@ -230,6 +292,12 @@ class AbandonedCart
 
     /**
      * Reserves the reminder in puffinmail_cart (so overlapping runs can't both send it), then queues the event.
+     *
+     * @param StoreInterface $store
+     * @param array $quote
+     * @param string $email
+     * @param int $step
+     * @return bool whether the reminder was queued
      */
     private function queue(StoreInterface $store, array $quote, string $email, int $step): bool
     {
@@ -270,7 +338,13 @@ class AbandonedCart
             if ($coupon !== null) {
                 $connection->update($this->table(), ['coupon_code' => $coupon['code']], ['quote_id = ?' => $quoteId]);
             }
-            $event = $this->buildEvent($store, $quote, $step, $coupon, $this->restoreUrl($store, (string) $cart['token']));
+            $event = $this->buildEvent(
+                $store,
+                $quote,
+                $step,
+                $coupon,
+                $this->restoreUrl($store, (string) $cart['token'])
+            );
             $event['email'] = $email;
             $this->outbox->event($storeId, $event);
             return true;
@@ -280,13 +354,30 @@ class AbandonedCart
                 ['reminders_sent' => $step - 1] + ($step === 1 ? ['first_sent_at' => null] : []),
                 ['quote_id = ?' => $quoteId]
             );
-            $this->logger->error(sprintf('Abandoned cart #%d reminder %d failed: %s', $quoteId, $step, $e->getMessage()));
+            $this->logger->error(
+                sprintf('Abandoned cart #%d reminder %d failed: %s', $quoteId, $step, $e->getMessage())
+            );
             return false;
         }
     }
 
-    private function buildEvent(StoreInterface $store, array $quote, int $step, ?array $coupon, string $restoreUrl): array
-    {
+    /**
+     * The reminder event for a quote: cart contents, restore link, coupon and store details.
+     *
+     * @param StoreInterface $store
+     * @param array $quote
+     * @param int $step
+     * @param array|null $coupon
+     * @param string $restoreUrl
+     * @return array
+     */
+    private function buildEvent(
+        StoreInterface $store,
+        array $quote,
+        int $step,
+        ?array $coupon,
+        string $restoreUrl
+    ): array {
         $storeId = (int) $store->getId();
         $quoteId = (int) $quote['entity_id'];
         return $this->mapper->extend([
@@ -307,6 +398,13 @@ class AbandonedCart
         ], $store, ['quote_id' => $quoteId, 'customer_id' => (int) $quote['customer_id']]);
     }
 
+    /**
+     * The storefront link that restores the cart for a token.
+     *
+     * @param StoreInterface $store
+     * @param string $token
+     * @return string
+     */
     private function restoreUrl(StoreInterface $store, string $token): string
     {
         return $store->getUrl('puffinmail/cart/restore', [
@@ -316,11 +414,27 @@ class AbandonedCart
         ]);
     }
 
+    /**
+     * The cart price rule configured for reminder $step (0 for none).
+     *
+     * @param int $step
+     * @param int $storeId
+     * @return int
+     */
     private function couponRule(int $step, int $storeId): int
     {
-        return (int) $this->config->getValue('abandoned_cart/' . ($step === 1 ? 'first' : 'second') . '_coupon_rule', $storeId);
+        return (int) $this->config->getValue(
+            'abandoned_cart/' . ($step === 1 ? 'first' : 'second') . '_coupon_rule',
+            $storeId
+        );
     }
 
+    /**
+     * Active carts with an email in a store view that may need a reminder, newest first.
+     *
+     * @param int $storeId
+     * @return array
+     */
     private function candidates(int $storeId): array
     {
         $connection = $this->resource->getConnection();
@@ -330,7 +444,14 @@ class AbandonedCart
             $connection->select()
                 ->from(
                     ['q' => $this->resource->getTableName('quote')],
-                    ['entity_id', 'customer_id', 'customer_email', 'customer_firstname', 'updated_at', 'quote_currency_code']
+                    [
+                        'entity_id',
+                        'customer_id',
+                        'customer_email',
+                        'customer_firstname',
+                        'updated_at',
+                        'quote_currency_code',
+                    ]
                 )
                 ->joinLeft(
                     ['c' => $this->table()],
@@ -342,13 +463,24 @@ class AbandonedCart
                 ->where('q.items_count > 0')
                 ->where("q.customer_email IS NOT NULL AND q.customer_email <> ''")
                 ->where('q.updated_at >= ?', gmdate('Y-m-d H:i:s', time() - $maxAgeDays * 86400))
-                ->where('q.base_subtotal >= ?', (float) $this->config->getValue('abandoned_cart/min_subtotal', $storeId))
+                ->where(
+                    'q.base_subtotal >= ?',
+                    (float) $this->config->getValue('abandoned_cart/min_subtotal', $storeId)
+                )
                 ->where("c.status IS NULL OR c.status = 'active'")
                 ->order('q.updated_at DESC')
                 ->limit(self::BATCH_LIMIT)
         );
     }
 
+    /**
+     * Whether the address has placed an order (not cancelled) in the website since $since.
+     *
+     * @param string $email
+     * @param string $since
+     * @param int $storeId
+     * @return bool
+     */
     private function hasOrderedSince(string $email, string $since, int $storeId): bool
     {
         $connection = $this->resource->getConnection();
@@ -363,7 +495,13 @@ class AbandonedCart
         );
     }
 
-    /** Whether the address got a reminder for a *different* cart recently. */
+    /**
+     * Whether the address got a reminder for a *different* cart recently.
+     *
+     * @param string $email
+     * @param int $quoteId
+     * @return bool
+     */
     private function remindedRecently(string $email, int $quoteId): bool
     {
         $connection = $this->resource->getConnection();
@@ -372,11 +510,20 @@ class AbandonedCart
                 ->from($this->table(), ['quote_id'])
                 ->where('email = ?', $email)
                 ->where('quote_id <> ?', $quoteId)
-                ->where('last_sent_at >= ?', gmdate('Y-m-d H:i:s', time() - self::OTHER_CART_COOLDOWN_HOURS * 3600))
+                ->where(
+                    'last_sent_at >= ?',
+                    gmdate('Y-m-d H:i:s', time() - self::OTHER_CART_COOLDOWN_HOURS * 3600)
+                )
                 ->limit(1)
         );
     }
 
+    /**
+     * The puffinmail_cart row for a quote, or null if it isn't tracked yet.
+     *
+     * @param int $quoteId
+     * @return array|null
+     */
     private function get(int $quoteId): ?array
     {
         $connection = $this->resource->getConnection();
@@ -385,6 +532,11 @@ class AbandonedCart
         ) ?: null;
     }
 
+    /**
+     * The puffinmail_cart table name, with any prefix.
+     *
+     * @return string
+     */
     private function table(): string
     {
         return $this->resource->getTableName(self::TABLE);

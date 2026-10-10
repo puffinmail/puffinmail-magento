@@ -36,6 +36,12 @@ class Outbox
     private const MAX_ATTEMPTS = 8;
     private const MAX_DELAY = 6 * 3600;
 
+    /**
+     * Outbox constructor.
+     *
+     * @param ResourceConnection $resource
+     * @param Json $json
+     */
     public function __construct(
         private readonly ResourceConnection $resource,
         private readonly Json $json
@@ -43,8 +49,14 @@ class Outbox
     }
 
     /**
-     * Queues a contact upsert (Store API POST /contacts). Pending updates for the same email are merged so the
-     * latest details win and an earlier subscription isn't lost.
+     * Queues a contact upsert (Store API POST /contacts).
+     *
+     * Pending updates for the same email are merged so the latest details win and an earlier subscription
+     * isn't lost.
+     *
+     * @param int $storeId
+     * @param array $contact
+     * @return void
      */
     public function contact(int $storeId, array $contact): void
     {
@@ -60,16 +72,34 @@ class Outbox
         $this->put($storeId, self::KIND_CONTACT, $this->key($storeId, self::KIND_CONTACT, $email), $contact, true);
     }
 
-    /** Queues a catalogue product (POST /products). Re-queuing the same product replaces the pending one. */
+    /**
+     * Queues a catalogue product (POST /products). Re-queuing the same product replaces the pending one.
+     *
+     * @param int $storeId
+     * @param array $product
+     * @return void
+     */
     public function catalog(int $storeId, array $product): void
     {
         if (empty($product['id'])) {
             return;
         }
-        $this->put($storeId, self::KIND_CATALOG, $this->key($storeId, self::KIND_CATALOG, (string) $product['id']), $product, false);
+        $this->put(
+            $storeId,
+            self::KIND_CATALOG,
+            $this->key($storeId, self::KIND_CATALOG, (string) $product['id']),
+            $product,
+            false
+        );
     }
 
-    /** Queues an event. Re-queuing the same type and id replaces the pending one. */
+    /**
+     * Queues an event. Re-queuing the same type and id replaces the pending one.
+     *
+     * @param int $storeId
+     * @param array $event
+     * @return void
+     */
     public function event(int $storeId, array $event): void
     {
         $event['email'] = $this->normalize((string) ($event['email'] ?? ''));
@@ -80,6 +110,13 @@ class Outbox
         $this->put($storeId, self::KIND_EVENT, $key, $event, false);
     }
 
+    /**
+     * Queues an unsubscribe and removes the opt-in from a pending contact update for the same email.
+     *
+     * @param int $storeId
+     * @param string $email
+     * @return void
+     */
     public function unsubscribe(int $storeId, string $email): void
     {
         $email = $this->normalize($email);
@@ -87,10 +124,22 @@ class Outbox
             return;
         }
         $this->stripPendingSubscription($storeId, $email);
-        $this->put($storeId, self::KIND_UNSUBSCRIBE, $this->key($storeId, self::KIND_UNSUBSCRIBE, $email), ['email' => $email], false);
+        $this->put(
+            $storeId,
+            self::KIND_UNSUBSCRIBE,
+            $this->key($storeId, self::KIND_UNSUBSCRIBE, $email),
+            ['email' => $email],
+            false
+        );
     }
 
-    /** Queues a contact erasure and drops anything still waiting to be sent for that email. */
+    /**
+     * Queues a contact erasure and drops anything still waiting to be sent for that email.
+     *
+     * @param int $storeId
+     * @param string $email
+     * @return void
+     */
     public function deleteContact(int $storeId, string $email): void
     {
         $email = $this->normalize($email);
@@ -113,15 +162,26 @@ class Outbox
                 $this->remove((int) $row['outbox_id']);
             }
         }
-        $this->put($storeId, self::KIND_DELETE, $this->key($storeId, self::KIND_DELETE, $email), ['email' => $email], false);
+        $this->put(
+            $storeId,
+            self::KIND_DELETE,
+            $this->key($storeId, self::KIND_DELETE, $email),
+            ['email' => $email],
+            false
+        );
     }
 
     /**
-     * Queues a reference that OutboxProcessor turns into contacts/events when it runs, so building the payload
-     * (order stats, product images) happens in cron rather than in the request that saved the entity.
+     * Queues a reference that OutboxProcessor turns into contacts/events when it runs.
      *
+     * Building the payload (order stats, product images) happens in cron rather than in the request that saved
+     * the entity.
+     *
+     * @param int $storeId
      * @param string $kind customer | order | creditmemo | product
+     * @param int $id
      * @param array $extra stored with the reference (e.g. ['backfill' => true])
+     * @return void
      */
     public function ref(int $storeId, string $kind, int $id, array $extra = []): void
     {
@@ -136,6 +196,9 @@ class Outbox
     /**
      * Rows of $kind that are due for a store view, oldest first.
      *
+     * @param int $storeId
+     * @param string $kind
+     * @param int $limit
      * @return array<int, array{outbox_id: string, payload: array, attempts: string}>
      */
     public function due(int $storeId, string $kind, int $limit): array
@@ -157,7 +220,11 @@ class Outbox
         return $rows;
     }
 
-    /** @return int[] store views with rows due now */
+    /**
+     * Store views with rows due now.
+     *
+     * @return int[]
+     */
     public function dueStoreIds(): array
     {
         $connection = $this->resource->getConnection();
@@ -170,11 +237,24 @@ class Outbox
         ));
     }
 
+    /**
+     * Deletes a row (sent, or no longer needed).
+     *
+     * @param int $outboxId
+     * @return void
+     */
     public function remove(int $outboxId): void
     {
         $this->resource->getConnection()->delete($this->table(), ['outbox_id = ?' => $outboxId]);
     }
 
+    /**
+     * Marks a row as permanently failed, keeping the error for the status panel.
+     *
+     * @param int $outboxId
+     * @param string $error
+     * @return void
+     */
     public function markFailed(int $outboxId, string $error): void
     {
         $this->resource->getConnection()->update(
@@ -185,8 +265,14 @@ class Outbox
     }
 
     /**
-     * After a failed call: retryable errors are rescheduled with exponential backoff (up to 8 attempts), the rest
-     * fail permanently. A 401 is handled by the caller (the whole store view pauses), not here.
+     * Reschedules or fails rows after a failed call.
+     *
+     * Retryable errors are rescheduled with exponential backoff (up to 8 attempts), the rest fail permanently.
+     * A 401 is handled by the caller (the whole store view pauses), not here.
+     *
+     * @param array $rows
+     * @param ApiException $error
+     * @return void
      */
     public function handleError(array $rows, ApiException $error): void
     {
@@ -212,6 +298,9 @@ class Outbox
     }
 
     /**
+     * Pending and failed row counts, for one store view or all of them.
+     *
+     * @param int|null $storeId
      * @return array{pending: int, failed: int}
      */
     public function stats(?int $storeId = null): array
@@ -223,10 +312,18 @@ class Outbox
         if ($storeId !== null) {
             $select->where('store_id = ?', $storeId);
         }
-        return array_map('intval', $connection->fetchPairs($select)) + [self::STATUS_PENDING => 0, self::STATUS_FAILED => 0];
+        return array_map('intval', $connection->fetchPairs($select))
+            + [self::STATUS_PENDING => 0, self::STATUS_FAILED => 0];
     }
 
-    /** @return array<int, array{store_id: string, kind: string, dedupe_key: string, last_error: string, updated_at: string}> */
+    /**
+     * The most recent permanently failed rows, newest first.
+     *
+     * @param int $limit
+     * @return array<int, array{
+     *     store_id: string, kind: string, dedupe_key: string, last_error: string, updated_at: string
+     * }>
+     */
     public function recentFailures(int $limit = 10): array
     {
         $connection = $this->resource->getConnection();
@@ -239,6 +336,11 @@ class Outbox
         );
     }
 
+    /**
+     * Puts every failed row back in the queue, due now. Returns the number of rows.
+     *
+     * @return int
+     */
     public function retryFailed(): int
     {
         return $this->resource->getConnection()->update(
@@ -248,7 +350,11 @@ class Outbox
         );
     }
 
-    /** Failed rows are kept for a month for the status panel, then dropped. */
+    /**
+     * Drops failed rows older than a month (they are kept that long for the status panel).
+     *
+     * @return void
+     */
     public function purgeOldFailures(): void
     {
         $this->resource->getConnection()->delete($this->table(), [
@@ -257,12 +363,28 @@ class Outbox
         ]);
     }
 
+    /**
+     * Lower-cased, trimmed email, or '' if it isn't a valid address.
+     *
+     * @param string $email
+     * @return string
+     */
     public function normalize(string $email): string
     {
         $email = strtolower(trim($email));
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
     }
 
+    /**
+     * Inserts a row, or updates the row with the same dedupe key (merging payloads when $merge is set).
+     *
+     * @param int $storeId
+     * @param string $kind
+     * @param string $dedupeKey
+     * @param array $payload
+     * @param bool $merge
+     * @return void
+     */
     private function put(int $storeId, string $kind, string $dedupeKey, array $payload, bool $merge): void
     {
         $connection = $this->resource->getConnection();
@@ -317,6 +439,13 @@ class Outbox
         );
     }
 
+    /**
+     * Removes the subscription field from a pending contact update, so it can't undo an unsubscribe.
+     *
+     * @param int $storeId
+     * @param string $email
+     * @return void
+     */
     private function stripPendingSubscription(int $storeId, string $email): void
     {
         $connection = $this->resource->getConnection();
@@ -338,18 +467,35 @@ class Outbox
 
     /**
      * Drops a queued row, pending or failed, so "Retry failed" can't later undo a newer consent change.
+     *
+     * @param string $dedupeKey
+     * @return void
      */
     private function deletePending(string $dedupeKey): void
     {
         $this->resource->getConnection()->delete($this->table(), ['dedupe_key = ?' => $dedupeKey]);
     }
 
+    /**
+     * Dedupe key for a row; long ids are hashed to fit the column.
+     *
+     * @param int $storeId
+     * @param string $kind
+     * @param string $id
+     * @return string
+     */
     private function key(int $storeId, string $kind, string $id): string
     {
         $key = $storeId . '|' . $kind . '|' . $id;
         return strlen($key) <= 191 ? $key : $storeId . '|' . $kind . '|sha1:' . sha1($id);
     }
 
+    /**
+     * Decodes a stored JSON payload ([] if it can't be read).
+     *
+     * @param string $payload
+     * @return array
+     */
     private function decode(string $payload): array
     {
         try {
@@ -360,11 +506,21 @@ class Outbox
         return is_array($data) ? $data : [];
     }
 
+    /**
+     * The outbox table name, with any prefix.
+     *
+     * @return string
+     */
     private function table(): string
     {
         return $this->resource->getTableName(self::TABLE);
     }
 
+    /**
+     * Current time in UTC, in the database format.
+     *
+     * @return string
+     */
     private function now(): string
     {
         return gmdate('Y-m-d H:i:s');

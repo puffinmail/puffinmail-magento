@@ -27,6 +27,17 @@ class Connection
     /** Automatic reconnect attempts (from cron) for a store view that isn't connected yet. */
     private const RETRY_SECONDS = 900;
 
+    /**
+     * Connection constructor.
+     *
+     * @param Config $config
+     * @param Client $client
+     * @param FlagManager $flagManager
+     * @param StoreManagerInterface $storeManager
+     * @param ScopeConfigInterface $scopeConfig
+     * @param ProductMetadataInterface $productMetadata
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Client $client,
@@ -39,6 +50,9 @@ class Connection
     }
 
     /**
+     * The saved connection details for the store view's API key ([] without a key or connection).
+     *
+     * @param int $storeId
      * @return array{store_id?: string, store_name?: string, organization?: string, list_name?: string,
      *   webhook_secret?: string, site_key?: string, script_url?: string, connected_at?: int, auth_error?: string,
      *   last_error?: string, attempted_at?: int, storefront_checked_at?: int}
@@ -53,12 +67,24 @@ class Connection
         return is_array($data) ? $data : [];
     }
 
+    /**
+     * Whether the store view is connected and its key hasn't been rejected.
+     *
+     * @param int $storeId
+     * @return bool
+     */
     public function isConnected(int $storeId): bool
     {
         $data = $this->get($storeId);
         return !empty($data['store_id']) && empty($data['auth_error']);
     }
 
+    /**
+     * The secret PuffinMail signs webhooks with for the store view ('' if not connected).
+     *
+     * @param int $storeId
+     * @return string
+     */
     public function getWebhookSecret(int $storeId): string
     {
         return (string) ($this->get($storeId)['webhook_secret'] ?? '');
@@ -67,7 +93,10 @@ class Connection
     /**
      * Connects (or refreshes) a store view.
      *
+     * @param int $storeId
+     * @return array the saved connection details
      * @throws ApiException
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
     public function connect(int $storeId): array
     {
@@ -103,12 +132,17 @@ class Connection
             'connected_at' => time(),
         ];
         $this->flagManager->saveFlag($key, $data);
-        $this->logger->info(sprintf('Store view %s connected to PuffinMail store "%s"', $store->getCode(), $data['store_name']));
+        $this->logger->info(
+            sprintf('Store view %s connected to PuffinMail store "%s"', $store->getCode(), $data['store_name'])
+        );
         return $data;
     }
 
     /**
      * Used by cron: connects store views that have a key but no (working) connection, at most every 15 minutes.
+     *
+     * @param int $storeId
+     * @return bool whether the store view is connected
      */
     public function ensureConnected(int $storeId): bool
     {
@@ -131,20 +165,32 @@ class Connection
         }
     }
 
-    /** The storefront script URL for the store view ('' if not connected). */
+    /**
+     * The storefront script URL for the store view ('' if not connected).
+     *
+     * @param int $storeId
+     * @return string
+     */
     public function getScriptUrl(int $storeId): string
     {
         return $this->isConnected($storeId) ? (string) ($this->get($storeId)['script_url'] ?? '') : '';
     }
 
     /**
-     * Connections made before the storefront script existed don't know its URL: refresh them (from cron), at most
-     * once a day.
+     * Refreshes connections that don't know the storefront script URL (from cron), at most once a day.
+     *
+     * Connections made before the storefront script existed don't have it.
+     *
+     * @param int $storeId
+     * @return void
      */
     public function ensureStorefront(int $storeId): void
     {
         $data = $this->get($storeId);
-        if (!$this->isConnected($storeId) || !empty($data['script_url']) || time() - (int) ($data['storefront_checked_at'] ?? 0) < 86400) {
+        if (!$this->isConnected($storeId)
+            || !empty($data['script_url'])
+            || time() - (int) ($data['storefront_checked_at'] ?? 0) < 86400
+        ) {
             return;
         }
         $data['storefront_checked_at'] = time();
@@ -155,11 +201,19 @@ class Connection
         try {
             $this->connect($storeId);
         } catch (\Throwable $e) {
-            $this->logger->warning('Refreshing the PuffinMail connection of store view ' . $storeId . ' failed: ' . $e->getMessage());
+            $this->logger->warning(
+                'Refreshing the PuffinMail connection of store view ' . $storeId . ' failed: ' . $e->getMessage()
+            );
         }
     }
 
-    /** Records a 401 seen while syncing, pausing the store view until the connection is refreshed. */
+    /**
+     * Records a 401 seen while syncing, pausing the store view until the connection is refreshed.
+     *
+     * @param int $storeId
+     * @param string $error
+     * @return void
+     */
     public function markUnauthorized(int $storeId, string $error): void
     {
         $key = $this->flagKey($storeId);
@@ -189,6 +243,12 @@ class Connection
         return $stores;
     }
 
+    /**
+     * What PuffinMail is told about the shop on connect: URLs, platform and versions, currency and timezone.
+     *
+     * @param StoreInterface $store
+     * @return array
+     */
     private function shopDetails(StoreInterface $store): array
     {
         $storeId = (int) $store->getId();
@@ -211,7 +271,12 @@ class Connection
         ];
     }
 
-    /** Flag code for the store view's API key (and API URL), or null without a key. */
+    /**
+     * Flag code for the store view's API key (and API URL), or null without a key.
+     *
+     * @param int $storeId
+     * @return string|null
+     */
     private function flagKey(int $storeId): ?string
     {
         $apiKey = $this->config->getApiKey($storeId);

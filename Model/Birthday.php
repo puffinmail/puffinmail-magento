@@ -13,7 +13,7 @@ use PuffinMail\LifeCycle\Model\Api\Client;
 /**
  * Cron (hourly 09:00-20:00, so a missed run catches up the same day): sends `customer.birthday` for active
  * customers whose date of birth is today in the store view's timezone, with an optional coupon. PuffinMail
- * emails it with the workspace's "customer_birthday" transactional notification. Feb 29 birthdays are
+ * emails it with the Birthday store email. Feb 29 birthdays are
  * celebrated on Feb 28 in other years; puffinmail_birthday makes it once a year.
  */
 class Birthday
@@ -22,6 +22,21 @@ class Birthday
 
     private const TABLE = 'puffinmail_birthday';
 
+    /**
+     * Birthday constructor.
+     *
+     * @param Config $config
+     * @param Connection $connection
+     * @param ResourceConnection $resource
+     * @param StoreManagerInterface $storeManager
+     * @param TimezoneInterface $timezone
+     * @param Outbox $outbox
+     * @param Mapper $mapper
+     * @param CouponProvider $couponProvider
+     * @param StoreEmulation $emulation
+     * @param Client $client
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Connection $connection,
@@ -37,12 +52,20 @@ class Birthday
     ) {
     }
 
+    /**
+     * Cron entry point: queues today's birthday events.
+     *
+     * @return void
+     */
     public function execute(): void
     {
         $this->run();
     }
 
     /**
+     * Queues birthday events for today in every store view where birthday emails are on.
+     *
+     * @param bool $dryRun
      * @return string[] one line per event queued (or that would be, when $dryRun)
      */
     public function run(bool $dryRun = false): array
@@ -61,10 +84,18 @@ class Birthday
             $today = $this->timezone->scopeDate($storeId);
             $year = (int) $today->format('Y');
             foreach ($this->customersBornOn($today, $year) as $customer) {
-                if ($this->mapper->customerStoreId((int) $customer['store_id'], (int) $customer['website_id']) !== $storeId) {
+                if ($this->mapper->customerStoreId(
+                    (int) $customer['store_id'],
+                    (int) $customer['website_id']
+                ) !== $storeId) {
                     continue;
                 }
-                $line = sprintf('[%s] birthday customer #%d -> %s', $store->getCode(), $customer['entity_id'], $customer['email']);
+                $line = sprintf(
+                    '[%s] birthday customer #%d -> %s',
+                    $store->getCode(),
+                    $customer['entity_id'],
+                    $customer['email']
+                );
                 if ($dryRun || $this->emulation->run($storeId, fn () => $this->queue($store, $customer, $year))) {
                     $report[] = $line;
                 }
@@ -74,16 +105,24 @@ class Birthday
     }
 
     /**
-     * Sends the birthday event for a customer to $to straight away, without recording it or generating a
-     * coupon (a configured coupon shows as TESTCODE).
+     * Sends the birthday event for a customer to $to straight away.
      *
+     * It isn't recorded and no coupon is generated (a configured coupon shows as TESTCODE).
+     *
+     * @param int $customerId
+     * @param string $to
      * @return array the API's result for the event
+     * @throws \InvalidArgumentException if the customer doesn't exist
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     * @throws \PuffinMail\LifeCycle\Model\Api\ApiException
      */
     public function sendTest(int $customerId, string $to): array
     {
         $connection = $this->resource->getConnection();
         $customer = $connection->fetchRow(
-            $connection->select()->from($this->resource->getTableName('customer_entity'))->where('entity_id = ?', $customerId)
+            $connection->select()
+                ->from($this->resource->getTableName('customer_entity'))
+                ->where('entity_id = ?', $customerId)
         );
         if (!$customer) {
             throw new \InvalidArgumentException('Customer #' . $customerId . ' not found');
@@ -107,6 +146,14 @@ class Birthday
         return (array) ($response['results'][0] ?? []);
     }
 
+    /**
+     * Records this year's birthday for the customer (once only), then queues the event with any coupon.
+     *
+     * @param StoreInterface $store
+     * @param array $customer
+     * @param int $year
+     * @return bool whether the event was queued
+     */
     private function queue(StoreInterface $store, array $customer, int $year): bool
     {
         $storeId = (int) $store->getId();
@@ -141,6 +188,15 @@ class Birthday
         }
     }
 
+    /**
+     * The birthday event for a customer: first name, coupon and store details.
+     *
+     * @param StoreInterface $store
+     * @param array $customer
+     * @param int $year
+     * @param array|null $coupon
+     * @return array
+     */
     private function buildEvent(StoreInterface $store, array $customer, int $year, ?array $coupon): array
     {
         $customerId = (int) $customer['entity_id'];
@@ -158,7 +214,13 @@ class Birthday
         ], $store, ['customer_id' => $customerId]);
     }
 
-    /** Active customers born on today's day and month who haven't had this year's event. */
+    /**
+     * Active customers born on today's day and month who haven't had this year's event.
+     *
+     * @param \DateTimeInterface $today
+     * @param int $year
+     * @return array
+     */
     private function customersBornOn(\DateTimeInterface $today, int $year): array
     {
         $days = [$today->format('m-d')];
@@ -185,6 +247,11 @@ class Birthday
         );
     }
 
+    /**
+     * The puffinmail_birthday table name, with any prefix.
+     *
+     * @return string
+     */
     private function table(): string
     {
         return $this->resource->getTableName(self::TABLE);

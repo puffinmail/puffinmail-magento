@@ -19,6 +19,16 @@ use PuffinMail\LifeCycle\Model\Config;
  */
 class Email implements HttpPostActionInterface
 {
+    /**
+     * Email constructor.
+     *
+     * @param RequestInterface $request
+     * @param JsonFactory $jsonFactory
+     * @param CheckoutSession $checkoutSession
+     * @param CustomerSession $customerSession
+     * @param CartRepositoryInterface $cartRepository
+     * @param Config $config
+     */
     public function __construct(
         private readonly RequestInterface $request,
         private readonly JsonFactory $jsonFactory,
@@ -29,6 +39,11 @@ class Email implements HttpPostActionInterface
     ) {
     }
 
+    /**
+     * Saves a guest's typed email on their cart (when capture is on). Always answers ok.
+     *
+     * @return Json
+     */
     public function execute(): Json
     {
         $result = $this->jsonFactory->create()->setData(['ok' => true]);

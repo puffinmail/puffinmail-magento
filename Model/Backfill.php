@@ -19,6 +19,15 @@ class Backfill
     private const PAGE = 500;
     private const TIME_BUDGET = 30;
 
+    /**
+     * Backfill constructor.
+     *
+     * @param Config $config
+     * @param Outbox $outbox
+     * @param Mapper $mapper
+     * @param ResourceConnection $resource
+     * @param FlagManager $flagManager
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Outbox $outbox,
@@ -28,6 +37,11 @@ class Backfill
     ) {
     }
 
+    /**
+     * Cron entry point: queues pages while a backfill is running, within the run's time budget.
+     *
+     * @return void
+     */
     public function execute(): void
     {
         $started = time();
@@ -37,6 +51,8 @@ class Backfill
     }
 
     /**
+     * The backfill's progress (status 'idle' if it has never run).
+     *
      * @return array{status: string, phase?: string, cursor?: int, customers?: int, orders?: int, since?: ?string,
      *   started_at?: int, finished_at?: int}
      */
@@ -46,7 +62,12 @@ class Backfill
         return is_array($state) && isset($state['status']) ? $state : ['status' => 'idle'];
     }
 
-    /** @param int $months orders from the last N months; 0 = all */
+    /**
+     * Starts a backfill: customers first, then paid orders.
+     *
+     * @param int $months orders from the last N months; 0 = all
+     * @return void
+     */
     public function start(int $months): void
     {
         $this->flagManager->saveFlag(self::FLAG, [
@@ -60,6 +81,11 @@ class Backfill
         ]);
     }
 
+    /**
+     * Stops a running backfill (references already queued are still sent).
+     *
+     * @return void
+     */
     public function cancel(): void
     {
         $state = $this->state();
@@ -69,7 +95,11 @@ class Backfill
         }
     }
 
-    /** Queues one page. Returns the state afterwards. */
+    /**
+     * Queues one page. Returns the state afterwards.
+     *
+     * @return array
+     */
     public function step(): array
     {
         $state = $this->state();
@@ -81,6 +111,12 @@ class Backfill
         return $state;
     }
 
+    /**
+     * Queues the next page of customers; moves on to orders after the last page.
+     *
+     * @param array $state
+     * @return array the updated state
+     */
     private function customers(array $state): array
     {
         $connection = $this->resource->getConnection();
@@ -106,6 +142,12 @@ class Backfill
         return $state;
     }
 
+    /**
+     * Queues the next page of paid orders (flagged as backfill); finishes after the last page.
+     *
+     * @param array $state
+     * @return array the updated state
+     */
     private function orders(array $state): array
     {
         $connection = $this->resource->getConnection();

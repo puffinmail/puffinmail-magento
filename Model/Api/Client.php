@@ -20,6 +20,14 @@ class Client
     public const EVENT_BATCH = 50;
     public const PRODUCT_BATCH = 100;
 
+    /**
+     * Client constructor.
+     *
+     * @param Config $config
+     * @param ClientFactory $clientFactory
+     * @param ProductMetadataInterface $productMetadata
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly ClientFactory $clientFactory,
@@ -29,14 +37,25 @@ class Client
     }
 
     /**
+     * Reads the PuffinMail store the store view's API key belongs to.
+     *
+     * @param int $storeId
      * @return array{store: array, organization: array, newsletter: array, webhook_secret: string}
+     * @throws ApiException
      */
     public function getStore(int $storeId): array
     {
         return $this->request($storeId, 'GET', 'api/v1/store');
     }
 
-    /** Tells PuffinMail about the shop (URL, webhook URL, versions). Returns the same as getStore(). */
+    /**
+     * Tells PuffinMail about the shop (URL, webhook URL, versions). Returns the same as getStore().
+     *
+     * @param int $storeId
+     * @param array $details
+     * @return array
+     * @throws ApiException
+     */
     public function updateStore(int $storeId, array $details): array
     {
         return $this->request($storeId, 'PATCH', 'api/v1/store', $details);
@@ -45,28 +64,51 @@ class Client
     /**
      * Upserts up to 100 contacts, keyed by email.
      *
+     * @param int $storeId
+     * @param array $contacts
      * @return array{results: array<int, array{email: string, ok: bool, error?: string}>}
+     * @throws ApiException
      */
     public function upsertContacts(int $storeId, array $contacts): array
     {
         return $this->request($storeId, 'POST', 'api/v1/contacts', ['contacts' => array_values($contacts)]);
     }
 
+    /**
+     * Unsubscribes the contact from the store's newsletter in PuffinMail.
+     *
+     * @param int $storeId
+     * @param string $email
+     * @return void
+     * @throws ApiException
+     */
     public function unsubscribe(int $storeId, string $email): void
     {
         $this->request($storeId, 'POST', 'api/v1/contacts/unsubscribe', ['email' => $email]);
     }
 
-    /** Erases the contact in PuffinMail (privacy erasure requests). */
+    /**
+     * Erases the contact in PuffinMail (privacy erasure requests).
+     *
+     * @param int $storeId
+     * @param string $email
+     * @return void
+     * @throws ApiException
+     */
     public function deleteContact(int $storeId, string $email): void
     {
         $this->request($storeId, 'POST', 'api/v1/contacts/delete', ['email' => $email]);
     }
 
     /**
-     * Records up to 50 events. Re-sending the same type and id updates the event (and re-triggers automations).
+     * Records up to 50 events.
      *
+     * Re-sending the same type and id updates the event (and re-triggers automations).
+     *
+     * @param int $storeId
+     * @param array $events
      * @return array{results: array<int, array{id: string, type: string, ok: bool, error?: string, email?: string}>}
+     * @throws ApiException
      */
     public function sendEvents(int $storeId, array $events): array
     {
@@ -76,7 +118,10 @@ class Client
     /**
      * Upserts up to 100 catalogue products (POST /api/v1/products), keyed by product id.
      *
+     * @param int $storeId
+     * @param array $products
      * @return array{results: array<int, array{id: string, ok: bool, error?: string}>}
+     * @throws ApiException
      */
     public function upsertProducts(int $storeId, array $products): array
     {
@@ -84,6 +129,13 @@ class Client
     }
 
     /**
+     * Makes a Store API call with the store view's API key and returns the decoded JSON body.
+     *
+     * @param int $storeId
+     * @param string $method
+     * @param string $path
+     * @param array|null $body
+     * @return array
      * @throws ApiException
      */
     private function request(int $storeId, string $method, string $path, ?array $body = null): array

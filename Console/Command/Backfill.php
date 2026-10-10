@@ -15,12 +15,22 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class Backfill extends Command
 {
+    /**
+     * Backfill constructor.
+     *
+     * @param BackfillModel $backfill
+     */
     public function __construct(
         private readonly BackfillModel $backfill
     ) {
         parent::__construct();
     }
 
+    /**
+     * Defines the command name, description and options.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:backfill')
@@ -29,6 +39,13 @@ class Backfill extends Command
             ->addOption('cancel', null, InputOption::VALUE_NONE, 'Stop a running historical sync');
     }
 
+    /**
+     * Starts (or with --cancel, stops) the historical sync.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         if ($input->getOption('cancel')) {
@@ -39,7 +56,8 @@ class Backfill extends Command
         $months = max(0, (int) $input->getOption('months'));
         $this->backfill->start($months);
         $output->writeln(sprintf(
-            '<info>Historical sync started (%s). Cron queues customers then orders; progress: bin/magento puffinmail:status</info>',
+            '<info>Historical sync started (%s). Cron queues customers then orders;'
+                . ' progress: bin/magento puffinmail:status</info>',
             $months > 0 ? 'orders from the last ' . $months . ' months' : 'all orders'
         ));
         return Command::SUCCESS;

@@ -17,6 +17,14 @@ use PuffinMail\LifeCycle\Model\Connection;
  */
 class Storefront implements ArgumentInterface
 {
+    /**
+     * Storefront constructor.
+     *
+     * @param Config $config
+     * @param Connection $connection
+     * @param StoreManagerInterface $storeManager
+     * @param RequestInterface $request
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Connection $connection,
@@ -25,6 +33,12 @@ class Storefront implements ArgumentInterface
     ) {
     }
 
+    /**
+     * The storefront script URL, or '' when the script is off, not connected or the URL isn't safe to load.
+     *
+     * @return string
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
+     */
     public function getScriptUrl(): string
     {
         $storeId = (int) $this->storeManager->getStore()->getId();
@@ -33,10 +47,15 @@ class Storefront implements ArgumentInterface
         }
         $url = $this->connection->getScriptUrl($storeId);
         // https, or a development portal on the local network.
-        return preg_match('#^https://#', $url) || preg_match('#^http://(localhost|127\.0\.0\.1|192\.168\.)#', $url) ? $url : '';
+        return preg_match('#^https://#', $url)
+            || preg_match('#^http://(localhost|127\.0\.0\.1|192\.168\.)#', $url) ? $url : '';
     }
 
-    /** @return array{product?: array{id: string}} */
+    /**
+     * Page-level hints for the script: the product on a product page.
+     *
+     * @return array{product?: array{id: string}}
+     */
     public function getPageHints(): array
     {
         if ($this->request instanceof HttpRequest && $this->request->getFullActionName() === 'catalog_product_view') {

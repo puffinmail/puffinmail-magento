@@ -10,6 +10,11 @@ use Magento\Framework\Data\OptionSourceInterface;
  */
 class Audience implements OptionSourceInterface
 {
+    /**
+     * Audience options: newsletter subscribers only, or everyone with a known email.
+     *
+     * @return array
+     */
     public function toOptionArray(): array
     {
         return [

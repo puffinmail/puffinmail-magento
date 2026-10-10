@@ -12,11 +12,21 @@ use Magento\SalesRule\Model\Rule;
  */
 class CartRule implements OptionSourceInterface
 {
+    /**
+     * CartRule constructor.
+     *
+     * @param CollectionFactory $collectionFactory
+     */
     public function __construct(
         private readonly CollectionFactory $collectionFactory
     ) {
     }
 
+    /**
+     * "No coupon" plus each active coupon rule, by name.
+     *
+     * @return array
+     */
     public function toOptionArray(): array
     {
         $options = [['value' => 0, 'label' => __('-- No coupon --')]];

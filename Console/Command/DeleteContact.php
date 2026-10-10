@@ -18,6 +18,14 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class DeleteContact extends Command
 {
+    /**
+     * DeleteContact constructor.
+     *
+     * @param Config $config
+     * @param Outbox $outbox
+     * @param StoreManagerInterface $storeManager
+     * @param ResourceConnection $resource
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Outbox $outbox,
@@ -27,6 +35,11 @@ class DeleteContact extends Command
         parent::__construct();
     }
 
+    /**
+     * Defines the command name, description and arguments.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:delete-contact')
@@ -34,6 +47,13 @@ class DeleteContact extends Command
             ->addArgument('email', InputArgument::REQUIRED, 'Email address');
     }
 
+    /**
+     * Queues the deletion once per PuffinMail store and removes the address's saved cart records.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $email = $this->outbox->normalize((string) $input->getArgument('email'));
@@ -57,7 +77,9 @@ class DeleteContact extends Command
             $this->resource->getTableName('puffinmail_cart'),
             ['email = ?' => $email]
         );
-        $output->writeln(sprintf('<info>Removed %d saved cart record(s). The outbox cron sends the deletions.</info>', $carts));
+        $output->writeln(
+            sprintf('<info>Removed %d saved cart record(s). The outbox cron sends the deletions.</info>', $carts)
+        );
         return Command::SUCCESS;
     }
 }

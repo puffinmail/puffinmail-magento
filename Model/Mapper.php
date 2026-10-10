@@ -39,6 +39,20 @@ class Mapper
     /** @var array<string, Product|null> */
     private array $products = [];
 
+    /**
+     * Mapper constructor.
+     *
+     * @param CustomerRepositoryInterface $customerRepository
+     * @param CustomerRegistry $customerRegistry
+     * @param ProductRepositoryInterface $productRepository
+     * @param QuoteFactory $quoteFactory
+     * @param ResourceConnection $resource
+     * @param StoreManagerInterface $storeManager
+     * @param ScopeConfigInterface $scopeConfig
+     * @param PriceCurrencyInterface $priceCurrency
+     * @param ImageHelper $imageHelper
+     * @param EventManager $eventManager
+     */
     public function __construct(
         private readonly CustomerRepositoryInterface $customerRepository,
         private readonly CustomerRegistry $customerRegistry,
@@ -55,7 +69,12 @@ class Mapper
 
     // -- Contacts ------------------------------------------------------------------------------------------
 
-    /** Contact from a registered customer (default billing address), or null if the customer is gone. */
+    /**
+     * Contact from a registered customer (default billing address), or null if the customer is gone.
+     *
+     * @param int $customerId
+     * @return array|null
+     */
     public function contactFromCustomer(int $customerId): ?array
     {
         try {
@@ -87,7 +106,12 @@ class Mapper
         ] + ($address ? $this->customerAddress($address) : []));
     }
 
-    /** Contact from an order's billing details (guests, or a customer's latest details). */
+    /**
+     * Contact from an order's billing details (guests, or a customer's latest details).
+     *
+     * @param Order $order
+     * @return array
+     */
     public function contactFromOrder(Order $order): array
     {
         $billing = $order->getBillingAddress();
@@ -119,6 +143,8 @@ class Mapper
     /**
      * Purchase totals for an address across the store view's website (registered and guest orders alike).
      *
+     * @param string $email
+     * @param int $storeId
      * @return array{orders_count: int, total_spent: float, first_order_at: ?string, last_order_at: ?string}
      */
     public function stats(string $email, int $storeId): array
@@ -147,7 +173,13 @@ class Mapper
 
     // -- Events --------------------------------------------------------------------------------------------
 
-    /** order.placed (with revenue), order.completed or order.cancelled. */
+    /**
+     * Event order.placed (with revenue), order.completed or order.cancelled.
+     *
+     * @param Order $order
+     * @param string $type
+     * @return array
+     */
     public function orderEvent(Order $order, string $type): array
     {
         $event = [
@@ -164,7 +196,13 @@ class Mapper
         return $this->extend($event, $order->getStore(), ['order_id' => (int) $order->getId()]);
     }
 
-    /** order.refunded: a negative value, so lifetime value in PuffinMail stays right. */
+    /**
+     * Event order.refunded: a negative value, so lifetime value in PuffinMail stays right.
+     *
+     * @param Order $order
+     * @param Creditmemo $creditmemo
+     * @return array
+     */
     public function refundEvent(Order $order, Creditmemo $creditmemo): array
     {
         return $this->extend([
@@ -184,6 +222,12 @@ class Mapper
         ], $order->getStore(), ['order_id' => (int) $order->getId()]);
     }
 
+    /**
+     * Order template variables: number, totals, payment and shipping, and the product lines.
+     *
+     * @param Order $order
+     * @return array
+     */
     public function orderProperties(Order $order): array
     {
         $storeId = (int) $order->getStoreId();
@@ -229,6 +273,8 @@ class Mapper
     /**
      * Cart contents for abandoned-cart events: items, total and item count.
      *
+     * @param int $quoteId
+     * @param int $storeId
      * @return array{items: array, total: float, total_formatted: string, item_count: float}
      */
     public function cartProperties(int $quoteId, int $storeId): array
@@ -238,7 +284,9 @@ class Mapper
         foreach ($quote->getId() ? $quote->getAllVisibleItems() : [] as $item) {
             $children = $item->getChildren();
             $qty = (float) $item->getQty();
-            $rowTotal = $item->getRowTotalInclTax() !== null ? (float) $item->getRowTotalInclTax() : (float) $item->getRowTotal();
+            $rowTotal = $item->getRowTotalInclTax() !== null
+                ? (float) $item->getRowTotalInclTax()
+                : (float) $item->getRowTotal();
             $items[] = $this->productLine(
                 (int) $item->getProductId(),
                 $children ? (int) reset($children)->getProductId() : null,
@@ -265,6 +313,11 @@ class Mapper
 
     /**
      * Lets other modules add template variables (event `puffinmail_event_properties`), then returns the event.
+     *
+     * @param array $event
+     * @param StoreInterface $store
+     * @param array $context
+     * @return array
      */
     public function extend(array $event, StoreInterface $store, array $context = []): array
     {
@@ -278,7 +331,12 @@ class Mapper
         return $event;
     }
 
-    /** Store-level template variables every email event carries. */
+    /**
+     * Store-level template variables every email event carries.
+     *
+     * @param StoreInterface $store
+     * @return array
+     */
     public function storeProperties(StoreInterface $store): array
     {
         return [
@@ -288,8 +346,18 @@ class Mapper
     }
 
     /**
-     * A product line for orders and carts: enough for an email to show the product. `price` is the unit price
-     * including tax; `price_formatted` the same in the store's currency format.
+     * A product line for orders and carts: enough for an email to show the product.
+     *
+     * `price` is the unit price including tax; `price_formatted` the same in the store's currency format.
+     *
+     * @param int $productId
+     * @param int|null $variantId
+     * @param string $sku
+     * @param string $name
+     * @param float $quantity
+     * @param float $price
+     * @param int $storeId
+     * @return array
      */
     public function productLine(
         int $productId,
@@ -317,7 +385,9 @@ class Mapper
                 $line['url'] = (string) $product->getProductUrl();
             }
             try {
-                $line['image_url'] = (string) $this->imageHelper->init($product, 'cart_page_product_thumbnail')->getUrl();
+                $line['image_url'] = (string) $this->imageHelper
+                    ->init($product, 'cart_page_product_thumbnail')
+                    ->getUrl();
             } catch (\Throwable $e) {
                 $line['image_url'] = '';
             }
@@ -325,17 +395,36 @@ class Mapper
         return $line;
     }
 
+    /**
+     * An amount in the store view's currency format.
+     *
+     * @param float $amount
+     * @param int $storeId
+     * @return string
+     */
     public function format(float $amount, int $storeId): string
     {
-        return (string) $this->priceCurrency->format($amount, false, PriceCurrencyInterface::DEFAULT_PRECISION, $storeId);
+        return (string) $this->priceCurrency->format(
+            $amount,
+            false,
+            PriceCurrencyInterface::DEFAULT_PRECISION,
+            $storeId
+        );
     }
 
     // -- Catalogue -----------------------------------------------------------------------------------------
 
     /**
-     * A catalogue product (Store API POST /products) as the store view shows it: current price (special/catalogue
-     * rule price included), the regular price when on sale, the product image and stock. Products that aren't
-     * enabled, visible in the catalogue and in the store view's website are sent as deleted, so emails leave them out.
+     * A catalogue product (Store API POST /products) as the store view shows it.
+     *
+     * Current price (special/catalogue rule price included), the regular price when on sale, the product image
+     * and stock. Products that aren't enabled, visible in the catalogue and in the store view's website are sent
+     * as deleted, so emails leave them out.
+     *
+     * @param Product $product
+     * @param int $storeId
+     * @return array
+     * @throws NoSuchEntityException
      */
     public function catalogProduct(Product $product, int $storeId): array
     {
@@ -343,8 +432,13 @@ class Mapper
         $priceInfo = $product->getPriceInfo();
         $price = (float) $priceInfo->getPrice('final_price')->getAmount()->getValue();
         $regular = (float) $priceInfo->getPrice('regular_price')->getAmount()->getValue();
-        $visible = (int) $product->getStatus() === \Magento\Catalog\Model\Product\Attribute\Source\Status::STATUS_ENABLED
-            && in_array((int) $product->getVisibility(), [Visibility::VISIBILITY_IN_CATALOG, Visibility::VISIBILITY_BOTH], true)
+        $visible = (int) $product->getStatus()
+                === \Magento\Catalog\Model\Product\Attribute\Source\Status::STATUS_ENABLED
+            && in_array(
+                (int) $product->getVisibility(),
+                [Visibility::VISIBILITY_IN_CATALOG, Visibility::VISIBILITY_BOTH],
+                true
+            )
             && in_array((int) $store->getWebsiteId(), array_map('intval', (array) $product->getWebsiteIds()), true);
         $url = $visible ? (string) $product->getProductUrl() : '';
         try {
@@ -376,7 +470,14 @@ class Mapper
         ];
     }
 
-    /** A withdrawn product (deleted in Magento): enough for the API to drop it from emails. */
+    /**
+     * A withdrawn product (deleted in Magento): enough for the API to drop it from emails.
+     *
+     * @param Product $product
+     * @param int $storeId
+     * @return array
+     * @throws NoSuchEntityException
+     */
     public function deletedProduct(Product $product, int $storeId): array
     {
         $store = $this->storeManager->getStore($storeId);
@@ -389,7 +490,12 @@ class Mapper
         ];
     }
 
-    /** "Y-m-d H:i:s" (UTC, as Magento stores it) -> ISO 8601. */
+    /**
+     * Converts "Y-m-d H:i:s" (UTC, as Magento stores it) to ISO 8601.
+     *
+     * @param string|null $utc
+     * @return string|null
+     */
     public function iso(?string $utc): ?string
     {
         if ($utc === null || $utc === '' || str_starts_with($utc, '0000')) {
@@ -400,8 +506,13 @@ class Mapper
     }
 
     /**
-     * The store view a customer belongs to: where they registered, or their website's default store view for
-     * admin-created customers (store_id 0).
+     * The store view a customer belongs to.
+     *
+     * Where they registered, or their website's default store view for admin-created customers (store_id 0).
+     *
+     * @param int $storeId
+     * @param int $websiteId
+     * @return int
      */
     public function customerStoreId(int $storeId, int $websiteId): int
     {
@@ -415,7 +526,12 @@ class Mapper
         }
     }
 
-    /** @return int[] store views of the store view's website (newsletter and order history are per website) */
+    /**
+     * Store views of the store view's website (newsletter and order history are per website).
+     *
+     * @param int $storeId
+     * @return int[]
+     */
     public function websiteStoreIds(int $storeId): array
     {
         try {
@@ -426,6 +542,12 @@ class Mapper
         return array_map('intval', array_values($ids)) ?: [$storeId];
     }
 
+    /**
+     * Contact address fields from a customer address.
+     *
+     * @param AddressInterface $address
+     * @return array
+     */
     private function customerAddress(AddressInterface $address): array
     {
         $street = (array) $address->getStreet();
@@ -440,6 +562,13 @@ class Mapper
         ];
     }
 
+    /**
+     * A product in a store view, cached per process (null if it no longer exists).
+     *
+     * @param int $productId
+     * @param int $storeId
+     * @return Product|null
+     */
     private function product(int $productId, int $storeId): ?Product
     {
         $key = $storeId . ':' . $productId;
@@ -457,19 +586,39 @@ class Mapper
         return $this->products[$key];
     }
 
-    /** "en_AU" -> "en" */
+    /**
+     * The store view's language from its locale ("en_AU" -> "en").
+     *
+     * @param int $storeId
+     * @return string|null
+     */
     private function language(int $storeId): ?string
     {
         $locale = (string) $this->scopeConfig->getValue('general/locale/code', ScopeInterface::SCOPE_STORE, $storeId);
         return $locale !== '' ? strtolower(substr($locale, 0, 2)) : null;
     }
 
+    /**
+     * The store view's timezone, or null if none is set.
+     *
+     * @param int $storeId
+     * @return string|null
+     */
     private function timezone(int $storeId): ?string
     {
-        return (string) $this->scopeConfig->getValue('general/locale/timezone', ScopeInterface::SCOPE_STORE, $storeId) ?: null;
+        return (string) $this->scopeConfig->getValue(
+            'general/locale/timezone',
+            ScopeInterface::SCOPE_STORE,
+            $storeId
+        ) ?: null;
     }
 
-    /** Drops empty fields (the API leaves omitted fields unchanged) and trims to the API's length limits. */
+    /**
+     * Drops empty fields (the API leaves omitted fields unchanged) and trims to the API's length limits.
+     *
+     * @param array $contact
+     * @return array
+     */
     private function clean(array $contact): array
     {
         $limits = ['phone' => 50, 'state' => 100, 'postcode' => 20, 'country' => 2];

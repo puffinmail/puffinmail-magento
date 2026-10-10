@@ -23,6 +23,13 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class TestEmail extends Command
 {
+    /**
+     * TestEmail constructor.
+     *
+     * @param State $appState
+     * @param AbandonedCart $abandonedCart
+     * @param Birthday $birthday
+     */
     public function __construct(
         private readonly State $appState,
         private readonly AbandonedCart $abandonedCart,
@@ -31,6 +38,11 @@ class TestEmail extends Command
         parent::__construct();
     }
 
+    /**
+     * Defines the command name, description, arguments and options.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:test-email')
@@ -41,12 +53,19 @@ class TestEmail extends Command
             ->addOption('reminder', null, InputOption::VALUE_REQUIRED, 'cart: reminder 1 or 2', '1');
     }
 
+    /**
+     * Sends the test event and prints what PuffinMail did with it.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         try {
             $this->appState->setAreaCode(Area::AREA_CRONTAB);
-        } catch (LocalizedException $e) {
-            // already set
+        } catch (LocalizedException $e) { // phpcs:ignore Magento2.CodeAnalysis.EmptyBlock.DetectedCatch
+            // Intentionally ignored: the area code is already set, which is fine.
         }
 
         $id = (int) $input->getArgument('id');
@@ -63,13 +82,16 @@ class TestEmail extends Command
         }
 
         if (empty($result['ok'])) {
-            $output->writeln('<error>PuffinMail rejected the event: ' . ($result['error'] ?? 'no reason given') . '</error>');
+            $output->writeln(
+                '<error>PuffinMail rejected the event: ' . ($result['error'] ?? 'no reason given') . '</error>'
+            );
             return Command::FAILURE;
         }
         $email = (string) ($result['email'] ?? '');
         $output->writeln(match ($email) {
             'sent' => '<info>Sent to ' . $to . '</info>',
-            'not_configured' => '<comment>Recorded, but no email: the workspace has no transactional notification for this event yet.</comment>',
+            'not_configured' => '<comment>Recorded, but no email: this store email is off or not set up yet'
+                . ' (Store emails in PuffinMail).</comment>',
             default => '<comment>Recorded; email status: ' . ($email ?: 'none') . '</comment>',
         });
         return Command::SUCCESS;

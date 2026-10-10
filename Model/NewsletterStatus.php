@@ -23,6 +23,14 @@ class NewsletterStatus
         'unsubscribed' => Subscriber::STATUS_UNSUBSCRIBED,
     ];
 
+    /**
+     * NewsletterStatus constructor.
+     *
+     * @param ResourceConnection $resource
+     * @param StoreManagerInterface $storeManager
+     * @param Mapper $mapper
+     * @param Random $random
+     */
     public function __construct(
         private readonly ResourceConnection $resource,
         private readonly StoreManagerInterface $storeManager,
@@ -32,8 +40,13 @@ class NewsletterStatus
     }
 
     /**
+     * Sets the address's newsletter status across the store view's website.
+     *
+     * @param int $storeId
+     * @param string $email
      * @param string $status subscribed | pending | unsubscribed
      * @return bool whether anything changed
+     * @throws \Magento\Framework\Exception\NoSuchEntityException
      */
     public function apply(int $storeId, string $email, string $status): bool
     {

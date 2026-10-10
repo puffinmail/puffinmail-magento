@@ -12,16 +12,30 @@ use Magento\Store\Model\App\Emulation;
  */
 class StoreEmulation
 {
+    /**
+     * The store view being emulated, or null when none is.
+     *
+     * @var int|null
+     */
     private ?int $current = null;
 
+    /**
+     * StoreEmulation constructor.
+     *
+     * @param Emulation $emulation
+     */
     public function __construct(
         private readonly Emulation $emulation
     ) {
     }
 
     /**
+     * Runs $callback under frontend emulation for the store view and returns its result.
+     *
      * @template T
-     * @param callable(): T $callback
+     * @param int $storeId
+     * @param callable $callback
+     * @phpstan-param callable(): T $callback
      * @return T
      */
     public function run(int $storeId, callable $callback): mixed

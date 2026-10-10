@@ -17,6 +17,15 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class Status extends Command
 {
+    /**
+     * Status constructor.
+     *
+     * @param Config $config
+     * @param Connection $connection
+     * @param Outbox $outbox
+     * @param Backfill $backfill
+     * @param StoreManagerInterface $storeManager
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Connection $connection,
@@ -27,12 +36,24 @@ class Status extends Command
         parent::__construct();
     }
 
+    /**
+     * Defines the command name and description.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:status')
             ->setDescription('Show PuffinMail connection, queue and historical-sync status');
     }
 
+    /**
+     * Prints each store view's connection and queue, recent failures and the historical sync's progress.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         foreach ($this->storeManager->getStores() as $store) {
@@ -42,8 +63,14 @@ class Status extends Command
             $state = match (true) {
                 !$this->config->hasApiKey($storeId) => 'no API key',
                 !empty($data['auth_error']) => 'KEY REJECTED: ' . $data['auth_error'],
-                empty($data['store_id']) => 'not connected' . (isset($data['last_error']) ? ': ' . $data['last_error'] : ''),
-                default => sprintf('connected to "%s" (%s), list "%s"', $data['store_name'], $data['organization'], $data['list_name']),
+                empty($data['store_id']) => 'not connected'
+                    . (isset($data['last_error']) ? ': ' . $data['last_error'] : ''),
+                default => sprintf(
+                    'connected to "%s" (%s), list "%s"',
+                    $data['store_name'],
+                    $data['organization'],
+                    $data['list_name']
+                ),
             };
             $output->writeln(sprintf(
                 '[%s] %s · pending %d · failed %d',
@@ -54,13 +81,20 @@ class Status extends Command
             ));
         }
         foreach ($this->outbox->recentFailures(10) as $failure) {
-            $output->writeln(sprintf('  failed %s %s: %s', $failure['updated_at'], $failure['dedupe_key'], $failure['last_error']));
+            $output->writeln(sprintf(
+                '  failed %s %s: %s',
+                $failure['updated_at'],
+                $failure['dedupe_key'],
+                $failure['last_error']
+            ));
         }
         $backfill = $this->backfill->state();
         $output->writeln(sprintf(
             'Historical sync: %s%s',
             $backfill['status'],
-            isset($backfill['customers']) ? sprintf(' (%d customers, %d orders queued)', $backfill['customers'], $backfill['orders']) : ''
+            isset($backfill['customers'])
+                ? sprintf(' (%d customers, %d orders queued)', $backfill['customers'], $backfill['orders'])
+                : ''
         ));
         return Command::SUCCESS;
     }

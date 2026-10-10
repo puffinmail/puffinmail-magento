@@ -17,6 +17,13 @@ use PuffinMail\LifeCycle\Model\Outbox;
  */
 class CreditmemoSaved implements ObserverInterface
 {
+    /**
+     * CreditmemoSaved constructor.
+     *
+     * @param Config $config
+     * @param Outbox $outbox
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Outbox $outbox,
@@ -24,6 +31,13 @@ class CreditmemoSaved implements ObserverInterface
     ) {
     }
 
+    /**
+     * Queues a credit memo reference when a refunded credit memo is first saved.
+     *
+     * @param Observer $observer
+     * @return void
+     * @throws DeadlockException|LockWaitException so Magento sees the rolled-back transaction
+     */
     public function execute(Observer $observer): void
     {
         $creditmemo = $observer->getEvent()->getData('creditmemo');
@@ -42,7 +56,9 @@ class CreditmemoSaved implements ObserverInterface
         } catch (DeadlockException | LockWaitException $e) {
             throw $e; // MySQL rolled back the transaction; Magento must see that.
         } catch (\Throwable $e) {
-            $this->logger->error('Queuing credit memo #' . $creditmemo->getIncrementId() . ' failed: ' . $e->getMessage());
+            $this->logger->error(
+                'Queuing credit memo #' . $creditmemo->getIncrementId() . ' failed: ' . $e->getMessage()
+            );
         }
     }
 }

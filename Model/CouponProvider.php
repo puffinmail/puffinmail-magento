@@ -18,6 +18,14 @@ class CouponProvider
 {
     public const TEST_CODE = 'TESTCODE';
 
+    /**
+     * CouponProvider constructor.
+     *
+     * @param RuleFactory $ruleFactory
+     * @param CouponManagementInterface $couponManagement
+     * @param CouponGenerationSpecInterfaceFactory $specFactory
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly RuleFactory $ruleFactory,
         private readonly CouponManagementInterface $couponManagement,
@@ -27,6 +35,10 @@ class CouponProvider
     }
 
     /**
+     * The coupon for a cart price rule: code, amount, type and expiry, or null if the rule gives none.
+     *
+     * @param int $ruleId
+     * @param string $prefix prefix for generated codes
      * @param bool $test describe the rule's coupon with code TESTCODE instead of generating one
      * @return array{code: string, amount: float, type: string, expires_at: ?string}|null
      */
@@ -55,10 +67,19 @@ class CouponProvider
             'code' => $code,
             'amount' => round((float) $rule->getDiscountAmount(), 2),
             'type' => $rule->getSimpleAction() === Rule::BY_PERCENT_ACTION ? 'percent' : 'fixed',
-            'expires_at' => $toDate !== '' ? gmdate('c', (int) strtotime(substr($toDate, 0, 10) . ' 23:59:59 UTC')) : null,
+            'expires_at' => $toDate !== ''
+                ? gmdate('c', (int) strtotime(substr($toDate, 0, 10) . ' 23:59:59 UTC'))
+                : null,
         ];
     }
 
+    /**
+     * A fresh code for an auto-generation rule, the shared code for a specific-coupon rule, otherwise null.
+     *
+     * @param Rule $rule
+     * @param string $prefix
+     * @return string|null
+     */
     private function code(Rule $rule, string $prefix): ?string
     {
         if ((int) $rule->getCouponType() === Rule::COUPON_TYPE_AUTO || $rule->getUseAutoGeneration()) {

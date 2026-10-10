@@ -21,6 +21,15 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class Run extends Command
 {
+    /**
+     * Run constructor.
+     *
+     * @param State $appState
+     * @param OutboxProcessor $outboxProcessor
+     * @param AbandonedCart $abandonedCart
+     * @param Birthday $birthday
+     * @param Backfill $backfill
+     */
     public function __construct(
         private readonly State $appState,
         private readonly OutboxProcessor $outboxProcessor,
@@ -31,20 +40,37 @@ class Run extends Command
         parent::__construct();
     }
 
+    /**
+     * Defines the command name, description, arguments and options.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:run')
             ->setDescription('Run a PuffinMail job now (same as its cron job)')
             ->addArgument('job', InputArgument::REQUIRED, 'outbox | abandoned-cart | birthday | backfill')
-            ->addOption('dry-run', null, InputOption::VALUE_NONE, 'abandoned-cart/birthday: list who would get an event without queuing it');
+            ->addOption(
+                'dry-run',
+                null,
+                InputOption::VALUE_NONE,
+                'abandoned-cart/birthday: list who would get an event without queuing it'
+            );
     }
 
+    /**
+     * Runs the job in the crontab area and prints its report lines.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         try {
             $this->appState->setAreaCode(Area::AREA_CRONTAB);
-        } catch (LocalizedException $e) {
-            // already set
+        } catch (LocalizedException $e) { // phpcs:ignore Magento2.CodeAnalysis.EmptyBlock.DetectedCatch
+            // Intentionally ignored: the area code is already set, which is fine.
         }
 
         $dryRun = (bool) $input->getOption('dry-run');
@@ -61,7 +87,12 @@ class Run extends Command
             case 'backfill':
                 $this->backfill->execute();
                 $state = $this->backfill->state();
-                $lines = [sprintf('backfill %s: %d customers, %d orders queued', $state['status'], $state['customers'] ?? 0, $state['orders'] ?? 0)];
+                $lines = [sprintf(
+                    'backfill %s: %d customers, %d orders queued',
+                    $state['status'],
+                    $state['customers'] ?? 0,
+                    $state['orders'] ?? 0
+                )];
                 break;
             default:
                 $output->writeln('<error>Unknown job. Use outbox, abandoned-cart, birthday or backfill.</error>');

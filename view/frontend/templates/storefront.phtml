@@ -18,7 +18,10 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
 ?>
 <script>
     (function () {
-        window.PuffinMail = Object.assign(window.PuffinMail || {}, <?= /* @noEscape */ json_encode((object) $viewModel->getPageHints(), $jsonFlags) ?>);
+        window.PuffinMail = Object.assign(
+            window.PuffinMail || {},
+            <?= /* @noEscape */ json_encode((object) $viewModel->getPageHints(), $jsonFlags) ?>
+        );
         var loaded = false;
         function load(data) {
             if (loaded) { return; }

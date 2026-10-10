@@ -17,6 +17,15 @@ class OrderSync
 {
     private const TABLE = 'puffinmail_order';
 
+    /**
+     * OrderSync constructor.
+     *
+     * @param Config $config
+     * @param Outbox $outbox
+     * @param Mapper $mapper
+     * @param AbandonedCart $abandonedCart
+     * @param ResourceConnection $resource
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Outbox $outbox,
@@ -29,8 +38,10 @@ class OrderSync
     /**
      * Queues the events the order's current state calls for, plus a contact update (stats change with orders).
      *
+     * @param Order $order
      * @param bool $backfill historical import: only the purchase and its refunds, flagged so no emails go out
      *                       and lifecycle automations (completed, cancelled) don't fire for old orders
+     * @return void
      */
     public function sync(Order $order, bool $backfill = false): void
     {
@@ -52,11 +63,20 @@ class OrderSync
 
         if ($backfill) {
             if ($paid && !$sent['placed_sent']) {
-                $this->outbox->event($storeId, ['backfill' => true] + $this->mapper->orderEvent($order, 'order.placed'));
+                $this->outbox->event(
+                    $storeId,
+                    ['backfill' => true] + $this->mapper->orderEvent($order, 'order.placed')
+                );
                 foreach ($order->getCreditmemosCollection() ?: [] as $creditmemo) {
-                    $this->outbox->event($storeId, ['backfill' => true] + $this->mapper->refundEvent($order, $creditmemo));
+                    $this->outbox->event(
+                        $storeId,
+                        ['backfill' => true] + $this->mapper->refundEvent($order, $creditmemo)
+                    );
                 }
-                $this->save($orderId, ['placed_sent' => 1, 'completed_sent' => (int) ($state === Order::STATE_COMPLETE)]);
+                $this->save(
+                    $orderId,
+                    ['placed_sent' => 1, 'completed_sent' => (int) ($state === Order::STATE_COMPLETE)]
+                );
             }
             $this->outbox->contact($storeId, $this->mapper->contactFromOrder($order));
             return;
@@ -83,6 +103,12 @@ class OrderSync
         $this->abandonedCart->orderPlaced($order);
     }
 
+    /**
+     * Queues the refund event for a credit memo, plus a contact update.
+     *
+     * @param Creditmemo $creditmemo
+     * @return void
+     */
     public function syncRefund(Creditmemo $creditmemo): void
     {
         $order = $creditmemo->getOrder();
@@ -94,7 +120,12 @@ class OrderSync
         $this->outbox->contact($storeId, $this->mapper->contactFromOrder($order));
     }
 
-    /** @return array{placed_sent: int, completed_sent: int, cancelled_sent: int} */
+    /**
+     * Which of the order's events have been sent already.
+     *
+     * @param int $orderId
+     * @return array{placed_sent: int, completed_sent: int, cancelled_sent: int}
+     */
     private function sent(int $orderId): array
     {
         $connection = $this->resource->getConnection();
@@ -106,6 +137,13 @@ class OrderSync
         return array_map('intval', $row ?: ['placed_sent' => 0, 'completed_sent' => 0, 'cancelled_sent' => 0]);
     }
 
+    /**
+     * Records which of the order's events have been sent.
+     *
+     * @param int $orderId
+     * @param array $sent
+     * @return void
+     */
     private function save(int $orderId, array $sent): void
     {
         $this->resource->getConnection()->insertOnDuplicate(

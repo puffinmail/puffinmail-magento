@@ -18,6 +18,16 @@ use PuffinMail\LifeCycle\Model\Outbox;
  */
 class Status extends Field
 {
+    /**
+     * Status constructor.
+     *
+     * @param Context $context
+     * @param Config $config
+     * @param Connection $connection
+     * @param Outbox $outbox
+     * @param Backfill $backfill
+     * @param array $data
+     */
     public function __construct(
         Context $context,
         private readonly Config $config,
@@ -29,12 +39,24 @@ class Status extends Field
         parent::__construct($context, $data);
     }
 
+    /**
+     * Renders the field without the scope label and "use default/website" checkboxes (it isn't a setting).
+     *
+     * @param AbstractElement $element
+     * @return string
+     */
     public function render(AbstractElement $element): string
     {
         $element->unsScope()->unsCanUseWebsiteValue()->unsCanUseDefaultValue();
         return parent::render($element);
     }
 
+    /**
+     * The panel: each store view's connection, the queue, recent failures, historical sync and the buttons.
+     *
+     * @param AbstractElement $element
+     * @return string
+     */
     protected function _getElementHtml(AbstractElement $element): string
     {
         $html = '<div class="puffinmail-status">';
@@ -49,7 +71,8 @@ class Status extends Field
             $stats[Outbox::STATUS_FAILED]
         )) . '</p>';
         if ($stats[Outbox::STATUS_FAILED] > 0) {
-            $html .= '<details style="margin:4px 0 8px"><summary>' . $this->escapeHtml(__('Recent failures')) . '</summary><ul style="margin-left:16px;list-style:disc">';
+            $html .= '<details style="margin:4px 0 8px"><summary>' . $this->escapeHtml(__('Recent failures'))
+                . '</summary><ul style="margin-left:16px;list-style:disc">';
             foreach ($this->outbox->recentFailures(10) as $failure) {
                 $html .= '<li><code>' . $this->escapeHtml($failure['dedupe_key']) . '</code>: '
                     . $this->escapeHtml((string) $failure['last_error']) . '</li>';
@@ -57,7 +80,8 @@ class Status extends Field
             $html .= '</ul></details>';
         }
 
-        $html .= '<p style="margin-top:12px"><strong>' . $this->escapeHtml(__('Existing customers and orders')) . '</strong><br/>'
+        $html .= '<p style="margin-top:12px"><strong>' . $this->escapeHtml(__('Existing customers and orders'))
+            . '</strong><br/>'
             . $this->escapeHtml($this->backfillText()) . '</p><p>';
         if ($this->backfill->state()['status'] === 'running') {
             $html .= $this->button(__('Stop'), 'backfill_cancel');
@@ -74,10 +98,18 @@ class Status extends Field
         return $html;
     }
 
+    /**
+     * One store view's line: not connected, key rejected, or connected (store, list and rows waiting).
+     *
+     * @param StoreInterface $store
+     * @return string
+     */
     private function storeStatus(StoreInterface $store): string
     {
         $storeId = (int) $store->getId();
-        $name = '<strong>' . $this->escapeHtml($store->getWebsite()->getName() . ' / ' . $store->getName()) . '</strong>: ';
+        $name = '<strong>'
+            . $this->escapeHtml($store->getWebsite()->getName() . ' / ' . $store->getName())
+            . '</strong>: ';
         if (!$this->config->hasApiKey($storeId)) {
             return '<p>' . $name . $this->escapeHtml(__('not connected (no API key)')) . '</p>';
         }
@@ -103,7 +135,11 @@ class Status extends Field
         return '<p>' . $name . $this->escapeHtml($text) . '</p>';
     }
 
-    /** @return StoreInterface[] store views of the configuration scope being edited */
+    /**
+     * Store views of the configuration scope being edited.
+     *
+     * @return StoreInterface[]
+     */
     private function storesInScope(): array
     {
         $storeParam = $this->getRequest()->getParam('store');
@@ -111,7 +147,8 @@ class Status extends Field
         $stores = [];
         foreach ($this->_storeManager->getStores() as $store) {
             if (($storeParam !== null && $storeParam !== '' && (int) $storeParam !== (int) $store->getId())
-                || ($websiteParam !== null && $websiteParam !== '' && (int) $websiteParam !== (int) $store->getWebsiteId())
+                || ($websiteParam !== null && $websiteParam !== ''
+                    && (int) $websiteParam !== (int) $store->getWebsiteId())
             ) {
                 continue;
             }
@@ -120,11 +157,20 @@ class Status extends Field
         return $stores;
     }
 
+    /**
+     * The historical sync's progress, or what it does when it hasn't run.
+     *
+     * @return string
+     */
     private function backfillText(): string
     {
         $state = $this->backfill->state();
         return match ($state['status']) {
-            'running' => (string) __('Queuing… %1 customers and %2 orders so far.', $state['customers'], $state['orders']),
+            'running' => (string) __(
+                'Queuing… %1 customers and %2 orders so far.',
+                $state['customers'],
+                $state['orders']
+            ),
             'done' => (string) __(
                 'Queued %1 customers and %2 orders on %3.',
                 $state['customers'],
@@ -135,11 +181,20 @@ class Status extends Field
         };
     }
 
+    /**
+     * A button-styled link to a status panel action (Controller\Adminhtml\Action\Run).
+     *
+     * @param \Magento\Framework\Phrase|string $label
+     * @param string $action
+     * @param array $params
+     * @return string
+     */
     private function button($label, string $action, array $params = []): string
     {
         $url = $this->getUrl('puffinmail/action/run', ['do' => $action] + $params);
         return sprintf(
-            '<a class="action-default" style="display:inline-block;margin:0 6px 6px 0;text-decoration:none" href="%s">%s</a>',
+            '<a class="action-default" style="display:inline-block;margin:0 6px 6px 0;text-decoration:none"'
+                . ' href="%s">%s</a>',
             $this->escapeUrl($url),
             $this->escapeHtml($label)
         );

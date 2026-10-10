@@ -19,6 +19,14 @@ use PuffinMail\LifeCycle\Model\Outbox;
  */
 class CustomerSaved implements ObserverInterface
 {
+    /**
+     * CustomerSaved constructor.
+     *
+     * @param Config $config
+     * @param Outbox $outbox
+     * @param Mapper $mapper
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Outbox $outbox,
@@ -27,6 +35,13 @@ class CustomerSaved implements ObserverInterface
     ) {
     }
 
+    /**
+     * Queues a customer reference for the customer's store view, if customers are synced there.
+     *
+     * @param Observer $observer
+     * @return void
+     * @throws DeadlockException|LockWaitException so Magento sees the rolled-back transaction
+     */
     public function execute(Observer $observer): void
     {
         $customer = $observer->getEvent()->getData('customer_data_object');

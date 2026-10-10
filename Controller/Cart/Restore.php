@@ -22,6 +22,19 @@ use PuffinMail\LifeCycle\Model\Logger;
  */
 class Restore implements HttpGetActionInterface
 {
+    /**
+     * Restore constructor.
+     *
+     * @param RequestInterface $request
+     * @param RedirectFactory $redirectFactory
+     * @param QuoteFactory $quoteFactory
+     * @param CheckoutSession $checkoutSession
+     * @param CustomerSession $customerSession
+     * @param ManagerInterface $messageManager
+     * @param UrlInterface $url
+     * @param AbandonedCart $abandonedCart
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly RequestInterface $request,
         private readonly RedirectFactory $redirectFactory,
@@ -35,6 +48,11 @@ class Restore implements HttpGetActionInterface
     ) {
     }
 
+    /**
+     * Restores the cart for the token and redirects to the cart page (or sign-in for a customer's cart).
+     *
+     * @return Redirect
+     */
     public function execute(): Redirect
     {
         $redirect = $this->redirectFactory->create()->setPath('checkout/cart');

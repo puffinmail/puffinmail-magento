@@ -27,6 +27,22 @@ class OutboxProcessor
     private const TIME_BUDGET = 45;
     private const REF_BATCH = 50;
 
+    /**
+     * OutboxProcessor constructor.
+     *
+     * @param Outbox $outbox
+     * @param Client $client
+     * @param Connection $connection
+     * @param Config $config
+     * @param Mapper $mapper
+     * @param OrderSync $orderSync
+     * @param StoreEmulation $emulation
+     * @param CustomerRepositoryInterface $customerRepository
+     * @param OrderFactory $orderFactory
+     * @param CreditmemoRepositoryInterface $creditmemoRepository
+     * @param ProductRepositoryInterface $productRepository
+     * @param Logger $logger
+     */
     public function __construct(
         private readonly Outbox $outbox,
         private readonly Client $client,
@@ -43,12 +59,19 @@ class OutboxProcessor
     ) {
     }
 
+    /**
+     * Cron entry point: processes the outbox.
+     *
+     * @return void
+     */
     public function execute(): void
     {
         $this->run();
     }
 
     /**
+     * Expands references and sends due rows for each store view, within the run's time budget.
+     *
      * @return string[] report lines
      */
     public function run(): array
@@ -57,7 +80,11 @@ class OutboxProcessor
         $report = [];
         foreach ($this->outbox->dueStoreIds() as $storeId) {
             if (!$this->connection->ensureConnected($storeId)) {
-                $report[] = sprintf('store view %d: not connected, %d row(s) waiting', $storeId, $this->outbox->stats($storeId)['pending']);
+                $report[] = sprintf(
+                    'store view %d: not connected, %d row(s) waiting',
+                    $storeId,
+                    $this->outbox->stats($storeId)['pending']
+                );
                 continue;
             }
             $counts = ['expanded' => 0, 'sent' => 0];
@@ -66,8 +93,16 @@ class OutboxProcessor
                 $sent = $this->flush($storeId);
                 $counts['expanded'] += $expanded;
                 $counts['sent'] += $sent;
-            } while (($expanded + $sent) > 0 && time() - $started < self::TIME_BUDGET && $this->connection->isConnected($storeId));
-            $report[] = sprintf('store view %d: %d reference(s) expanded, %d item(s) sent', $storeId, $counts['expanded'], $counts['sent']);
+            } while (($expanded + $sent) > 0
+                && time() - $started < self::TIME_BUDGET
+                && $this->connection->isConnected($storeId)
+            );
+            $report[] = sprintf(
+                'store view %d: %d reference(s) expanded, %d item(s) sent',
+                $storeId,
+                $counts['expanded'],
+                $counts['sent']
+            );
 
             if (time() - $started >= self::TIME_BUDGET) {
                 break;
@@ -81,6 +116,12 @@ class OutboxProcessor
 
     // -- References ----------------------------------------------------------------------------------------
 
+    /**
+     * Turns due references (customer, order, credit memo, product) into contacts, events and catalogue rows.
+     *
+     * @param int $storeId
+     * @return int references handled
+     */
     private function expand(int $storeId): int
     {
         $count = 0;
@@ -94,7 +135,9 @@ class OutboxProcessor
                     $this->outbox->remove($outboxId); // Deleted since it was queued: nothing to send.
                 } catch (\Throwable $e) {
                     $this->outbox->markFailed($outboxId, $e->getMessage());
-                    $this->logger->error(sprintf('Building %s #%d failed: %s', $kind, $row['payload']['id'] ?? 0, $e->getMessage()));
+                    $this->logger->error(
+                        sprintf('Building %s #%d failed: %s', $kind, $row['payload']['id'] ?? 0, $e->getMessage())
+                    );
                 }
                 $count++;
             }
@@ -102,6 +145,15 @@ class OutboxProcessor
         return $count;
     }
 
+    /**
+     * Expands one reference into what it queues: a contact, order events, a refund event or a catalogue row.
+     *
+     * @param string $kind
+     * @param array $payload
+     * @param int $storeId
+     * @return void
+     * @throws NoSuchEntityException if the entity was deleted since it was queued
+     */
     private function expandOne(string $kind, array $payload, int $storeId): void
     {
         $id = (int) ($payload['id'] ?? 0);
@@ -141,6 +193,12 @@ class OutboxProcessor
 
     // -- Sending -------------------------------------------------------------------------------------------
 
+    /**
+     * Sends due contacts, events, catalogue products, unsubscribes and deletions for a store view.
+     *
+     * @param int $storeId
+     * @return int rows attempted (0 if the store view stopped for this run)
+     */
     private function flush(int $storeId): int
     {
         try {
@@ -158,7 +216,11 @@ class OutboxProcessor
     /**
      * One batch call. The API answers with a result per item: contacts by email, events by id (and type).
      *
+     * @param int $storeId
+     * @param string $kind
+     * @param int $limit
      * @return int rows attempted
+     * @throws StopStoreException
      */
     private function flushBatch(int $storeId, string $kind, int $limit): int
     {
@@ -169,6 +231,15 @@ class OutboxProcessor
         return count($rows);
     }
 
+    /**
+     * Sends rows in one call (halving on 413), then removes the accepted ones and fails the rejected ones.
+     *
+     * @param int $storeId
+     * @param string $kind
+     * @param array $rows
+     * @return void
+     * @throws StopStoreException
+     */
     private function sendRows(int $storeId, string $kind, array $rows): void
     {
         $payloads = array_column($rows, 'payload');
@@ -211,7 +282,14 @@ class OutboxProcessor
         $this->logger->debug(sprintf('store view %d: sent %d %s(s)', $storeId, count($rows), $kind));
     }
 
-    /** Unsubscribes and deletions go one call each; a 404 (unknown contact) counts as done. */
+    /**
+     * Unsubscribes and deletions go one call each; a 404 (unknown contact) counts as done.
+     *
+     * @param int $storeId
+     * @param string $kind
+     * @return int rows attempted
+     * @throws StopStoreException
+     */
     private function flushSingles(int $storeId, string $kind): int
     {
         $rows = $this->outbox->due($storeId, $kind, 20);
@@ -235,6 +313,12 @@ class OutboxProcessor
     }
 
     /**
+     * Handles a failed call: pauses the store view on 401/403, otherwise reschedules or fails the rows.
+     *
+     * @param int $storeId
+     * @param array $rows
+     * @param ApiException $e
+     * @return void
      * @throws StopStoreException when the store view should stop for this run (key rejected, or PuffinMail down)
      */
     private function handleError(int $storeId, array $rows, ApiException $e): void
@@ -252,6 +336,13 @@ class OutboxProcessor
         }
     }
 
+    /**
+     * The key that matches an API result to its row: email for contacts, id for products, type|id for events.
+     *
+     * @param string $kind
+     * @param array $item
+     * @return string
+     */
     private function resultKey(string $kind, array $item): string
     {
         return match ($kind) {

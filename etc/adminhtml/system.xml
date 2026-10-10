@@ -67,7 +67,7 @@
             <group id="abandoned_cart" translate="label comment" type="text" sortOrder="30"
                    showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Abandoned Cart</label>
-                <comment>Sends cart.abandoned and cart.abandoned.reminder events. PuffinMail emails them with the "cart_abandoned" and "cart_abandoned_reminder" transactional notifications of your workspace.</comment>
+                <comment>Sends cart.abandoned and cart.abandoned.reminder events. You edit the two emails and turn them on under Store emails in PuffinMail.</comment>
                 <field id="enabled" translate="label" type="select" sortOrder="10"
                        showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Enabled</label>
@@ -128,7 +128,7 @@
             <group id="birthday" translate="label comment" type="text" sortOrder="40"
                    showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Birthday</label>
-                <comment>Sends customer.birthday on the customer's Date of Birth; PuffinMail emails it with the "customer_birthday" transactional notification. Collect DOB via Customers &gt; Customer Configuration &gt; Name and Address Options &gt; Show Date of Birth.</comment>
+                <comment>Sends customer.birthday on the customer's Date of Birth; You edit the Birthday email and turn it on under Store emails in PuffinMail. Collect DOB via Customers &gt; Customer Configuration &gt; Name and Address Options &gt; Show Date of Birth.</comment>
                 <field id="enabled" translate="label" type="select" sortOrder="10"
                        showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Enabled</label>

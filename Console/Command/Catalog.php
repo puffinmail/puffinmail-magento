@@ -16,6 +16,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class Catalog extends Command
 {
+    /**
+     * Catalog constructor.
+     *
+     * @param CatalogSync $catalogSync
+     * @param Connection $connection
+     */
     public function __construct(
         private readonly CatalogSync $catalogSync,
         private readonly Connection $connection
@@ -23,6 +29,11 @@ class Catalog extends Command
         parent::__construct();
     }
 
+    /**
+     * Defines the command name, description and options.
+     *
+     * @return void
+     */
     protected function configure(): void
     {
         $this->setName('puffinmail:catalog')
@@ -30,6 +41,13 @@ class Catalog extends Command
             ->addOption('restart', null, InputOption::VALUE_NONE, 'Send every product again');
     }
 
+    /**
+     * Prints each connected store view's catalogue sync state, restarting it first with --restart.
+     *
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     * @return int
+     */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         foreach ($this->connection->connectedStores() as $store) {

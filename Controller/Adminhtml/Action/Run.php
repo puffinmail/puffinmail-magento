@@ -21,6 +21,16 @@ class Run extends Action implements HttpGetActionInterface
 {
     public const ADMIN_RESOURCE = 'PuffinMail_LifeCycle::config';
 
+    /**
+     * Run constructor.
+     *
+     * @param Context $context
+     * @param Config $config
+     * @param Connection $connection
+     * @param Outbox $outbox
+     * @param Backfill $backfill
+     * @param StoreManagerInterface $storeManager
+     */
     public function __construct(
         Context $context,
         private readonly Config $config,
@@ -32,6 +42,11 @@ class Run extends Action implements HttpGetActionInterface
         parent::__construct($context);
     }
 
+    /**
+     * Runs the requested action, then goes back to the PuffinMail configuration page.
+     *
+     * @return Redirect
+     */
     public function execute(): Redirect
     {
         switch ((string) $this->getRequest()->getParam('do')) {
@@ -69,6 +84,7 @@ class Run extends Action implements HttpGetActionInterface
                 $this->messageManager->addSuccessMessage(__('Historical sync stopped.'));
                 break;
         }
-        return $this->resultRedirectFactory->create()->setPath('adminhtml/system_config/edit', ['section' => 'puffinmail']);
+        return $this->resultRedirectFactory->create()
+            ->setPath('adminhtml/system_config/edit', ['section' => 'puffinmail']);
     }
 }

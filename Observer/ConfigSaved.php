@@ -16,6 +16,14 @@ use PuffinMail\LifeCycle\Model\Connection;
  */
 class ConfigSaved implements ObserverInterface
 {
+    /**
+     * ConfigSaved constructor.
+     *
+     * @param Config $config
+     * @param Connection $connection
+     * @param StoreManagerInterface $storeManager
+     * @param ManagerInterface $messageManager
+     */
     public function __construct(
         private readonly Config $config,
         private readonly Connection $connection,
@@ -24,6 +32,12 @@ class ConfigSaved implements ObserverInterface
     ) {
     }
 
+    /**
+     * Connects each store view that has an API key and shows the result as an admin message.
+     *
+     * @param Observer $observer
+     * @return void
+     */
     public function execute(Observer $observer): void
     {
         foreach ($this->storeManager->getStores() as $store) {
